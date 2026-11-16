@@ -29,3 +29,13 @@
   [headers.values]
     Cache-Control = "no-cache"
     Service-Worker-Allowed = "/admin/"
+
+[[headers]]
+  for = "/logo.png"
+  [headers.values]
+    Cache-Control = "public, max-age=604800"
+
+[[headers]]
+  for = "/favicon.png"
+  [headers.values]
+    Cache-Control = "public, max-age=604800"

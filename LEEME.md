@@ -105,3 +105,15 @@ Sin código igual registra la venta, solo con el teléfono.
 Por defecto el Purchase con código sale como `website`, porque la compra nace de una visita a la landing y así cuenta
 para la campaña. Lo estrictamente literal sería `chat`, pero no está confirmado que Meta use esos eventos para optimizar
 una campaña de sitio web. Probalo con las primeras ventas en el Administrador de eventos antes de cambiarlo.
+
+
+## Novedades (categorías, combos, ventas, ajustes)
+
+**Al actualizar Code.gs**: pegá el nuevo código, ejecutá `setup()` una vez (agrega las columnas nuevas sin borrar nada) y creá una *nueva versión* de la implementación. No subas nunca `Acceso.gs` a GitHub.
+
+- **Categorías**: cada producto tiene `categoria`; la landing muestra filtros arriba. Cada producto puede tener sus propias etiquetas de guía de talles (ej. shorts: cintura/largo).
+- **Combos**: en Productos → "Nuevo combo" elegís 2–4 espacios (producto o categoría) y el precio del combo. El cliente elige talle y color de cada prenda y ve "antes" = suma real de las prendas elegidas y "ahora" = precio combo. El descuento es real: si el combo no es más barato que la suma, no se muestra tachado. Cuidá el margen: costo remera $9.000 + short $8.800 + publicidad.
+- **Ventas**: al pegar el mensaje del cliente se cargan los ítems; podés cambiar cantidad/talle/color, quitarlos o poner solo el **monto** cobrado. Evita registrar dos veces el mismo código.
+- **Ajustes**: cada sección (Tienda, Meta, Textos…) tiene su propio botón Guardar; guardar una no toca las demás.
+- **Reseñas**: usá "Pedir reseña" tras cada venta para juntar reseñas reales. No se cargan reseñas ni avisos de compra inventados (Meta puede cerrar la cuenta publicitaria y es publicidad engañosa). El aviso de "compró recientemente" usa ventas reales.
+- **Seguridad**: protección contra fórmulas en la planilla, límite de clics por IP, sesiones con hash. Dejá la planilla en acceso *Restringido* y cambiá la contraseña inicial desde el panel.

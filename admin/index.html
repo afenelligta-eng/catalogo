@@ -120,6 +120,26 @@ input.is-ok{border-color:var(--ok)}
 .icon-btn{width:40px;height:40px;border-radius:8px;display:grid;place-items:center;color:var(--muted);font-size:20px}
 .price-prev{font-size:14px;font-weight:700;margin-top:-4px;margin-bottom:12px}
 
+/* combos, items de venta, secciones de ajustes */
+.slotrow{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.slotrow select{flex:1}
+.vitem{display:grid;grid-template-columns:1fr auto;gap:6px 10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line);font-size:14.5px}
+.vitem:last-child{border-bottom:0}
+.vitem .vi-t{font-weight:700}
+.vitem .vi-s{font-size:13px;color:var(--muted)}
+.vitem .vi-edit{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.vitem .vi-edit select{min-height:42px;padding:6px 8px}
+.vqty{display:inline-flex;align-items:center;border:1.5px solid var(--line);border-radius:8px;background:#fff}
+.vqty button{width:36px;height:36px;font-size:18px;font-weight:700}
+.vqty button:disabled{color:#B5B9C6}
+.vqty output{min-width:24px;text-align:center;font-weight:800}
+.vadd{border:1.5px dashed #A9AEBD;border-radius:var(--r);padding:10px;margin-top:10px}
+.vadd .row{margin-bottom:8px}
+.vadd select{min-height:44px}
+.card .secsave{margin-top:6px}
+.sec-dirty{border-color:var(--ink)}
+.secnote{font-size:12.5px;color:var(--muted);margin-top:8px;text-align:center}
+
 /* diagnóstico */
 .chk{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-bottom:1px solid var(--line);font-size:14.5px}
 .chk:last-child{border-bottom:0}
@@ -190,8 +210,22 @@ input.is-ok{border-color:var(--ok)}
       <label class="f"><span>Teléfono del cliente</span>
         <input type="tel" id="vTel" inputmode="tel" autocomplete="off" placeholder="3774 62-1234">
         <small id="vTelHint">Con característica. Lo copiás del chat de WhatsApp.</small></label>
+      <div class="f" style="margin-bottom:12px">
+        <span style="display:block;font-size:14px;font-weight:700;margin-bottom:5px">Qué compró <small style="font-weight:500;color:var(--muted)">(podés cambiarlo si pidió otra cosa por el chat)</small></span>
+        <div id="vItems"></div>
+        <details class="vadd" id="vAdd">
+          <summary class="link" style="cursor:pointer">+ Agregar prenda</summary>
+          <div style="margin-top:10px">
+            <select id="vaProd" aria-label="Producto"></select>
+            <div class="row" style="margin-top:8px"><select id="vaColor" aria-label="Color"></select><select id="vaTalle" aria-label="Talle"></select></div>
+            <button type="button" class="btn ghost sm mt-s" id="vaBtn">Agregar</button>
+          </div>
+        </details>
+        <button type="button" class="link mt-s" id="vRestore" hidden>Volver al pedido original del cliente</button>
+      </div>
       <label class="f"><span>Monto cobrado</span>
-        <input type="text" id="vMonto" inputmode="numeric" autocomplete="off" placeholder="24000"></label>
+        <input type="text" id="vMonto" inputmode="numeric" autocomplete="off" placeholder="24000">
+        <small id="vMontoHint"></small></label>
       <label class="f"><span>Ciudad (opcional)</span>
         <input type="text" id="vCiudad" autocomplete="off" maxlength="40">
         <small>Aparece en el aviso de la tienda: "Alguien de … compró".</small></label>
@@ -208,7 +242,7 @@ input.is-ok{border-color:var(--ok)}
   <!-- ===== PRODUCTOS ===== -->
   <section id="t-prod" role="tabpanel" hidden>
     <div id="pListView">
-      <div class="row"><h2 class="grow">Productos</h2><button class="btn sm" id="pNew">+ Nuevo</button></div>
+      <div class="row"><h2 class="grow">Productos</h2><button class="btn ghost sm" id="pNewCombo">+ Combo</button><button class="btn sm" id="pNew">+ Nuevo</button></div>
       <div class="card"><ul class="list" id="pList"></ul></div>
       <p class="hint">Los cambios llegan a la tienda en un minuto como máximo.</p>
     </div>
@@ -219,31 +253,47 @@ input.is-ok{border-color:var(--ok)}
 
       <div class="card">
         <label class="f"><span>Nombre</span><input type="text" id="peNombre" maxlength="80"></label>
+        <label class="f" id="peCatBox"><span>Categoría</span><input type="text" id="peCat" list="cats" maxlength="30" placeholder="Remeras, Shorts…">
+          <small>La tienda arma los filtros con esto, y los combos pueden pedir "una prenda de esta categoría".</small></label>
+        <datalist id="cats"></datalist>
         <div class="row">
-          <label class="f grow"><span>Precio</span><input type="text" id="pePrecio" inputmode="numeric" placeholder="24000"></label>
-          <label class="f grow"><span>Precio anterior</span><input type="text" id="peAntes" inputmode="numeric" placeholder="Sin descuento"></label>
+          <label class="f grow"><span id="pePrecioLbl">Precio</span><input type="text" id="pePrecio" inputmode="numeric" placeholder="24000"></label>
+          <label class="f grow" id="peAntesBox"><span>Precio anterior</span><input type="text" id="peAntes" inputmode="numeric" placeholder="Sin descuento"></label>
         </div>
         <p class="price-prev" id="pePrev"></p>
         <label class="f"><span>Descripción</span><textarea id="peDesc" maxlength="600"></textarea></label>
         <div class="row">
-          <label class="f grow"><span>Calce</span><input type="text" id="peCalce" list="calces" maxlength="30"></label>
+          <label class="f grow" id="peCalceBox"><span>Calce</span><input type="text" id="peCalce" list="calces" maxlength="30"></label>
           <label class="f grow"><span>Etiqueta</span><input type="text" id="peEtiq" maxlength="24" placeholder="Más pedida"></label>
         </div>
         <datalist id="calces"><option value="Oversize"><option value="Regular"><option value="Slim"><option value="Boxy"></datalist>
-        <label class="f"><span>Tela</span><input type="text" id="peTela" maxlength="80"></label>
+        <label class="f" id="peTelaBox"><span>Tela</span><input type="text" id="peTela" maxlength="80"></label>
         <div class="row">
           <label class="check grow"><input type="checkbox" id="peActivo"> Visible en la tienda</label>
           <label class="f" style="width:110px;margin:0"><span>Orden</span><input type="number" id="peOrden" min="0" max="999"></label>
         </div>
       </div>
 
-      <div class="card">
+      <div class="card" id="peComboCard" hidden>
+        <h3>Qué incluye el combo</h3>
+        <p class="hint" style="margin:-4px 0 10px">Cada prenda puede ser un producto fijo, o una categoría para que el cliente elija cuál (por ejemplo "cualquier remera"). El cliente elige color y talle de cada una. El precio anterior se calcula solo con lo que cuestan por separado.</p>
+        <div id="peSlots"></div>
+        <button class="link" id="peAddSlot">+ Agregar prenda al combo</button>
+        <p class="price-prev" id="peComboPrev" style="margin-top:10px"></p>
+      </div>
+
+      <div class="card" id="peSizesCard">
         <h3>Talles y medidas (cm)</h3>
-        <table class="sizetbl"><thead><tr><th>Talle</th><th>Ancho pecho</th><th>Largo</th><th></th></tr></thead><tbody id="peSizes"></tbody></table>
+        <div class="row">
+          <label class="f grow"><span>Primera medida</span><input type="text" id="peCol1" maxlength="30" placeholder="Ancho de pecho"></label>
+          <label class="f grow"><span>Segunda medida</span><input type="text" id="peCol2" maxlength="30" placeholder="Largo"></label>
+        </div>
+        <p class="hint" style="margin:-6px 0 10px">Para shorts usá <button class="link" type="button" id="peColsShort">Cintura / Largo</button> · para remeras <button class="link" type="button" id="peColsTee">Ancho de pecho / Largo</button></p>
+        <table class="sizetbl"><thead><tr><th>Talle</th><th id="thCol1">Ancho pecho</th><th id="thCol2">Largo</th><th></th></tr></thead><tbody id="peSizes"></tbody></table>
         <button class="link mt-s" id="peAddSize">+ Agregar talle</button>
       </div>
 
-      <div class="card">
+      <div class="card" id="peVarsCard">
         <h3>Colores, fotos y stock</h3>
         <p class="hint" style="margin:-4px 0 10px">La primera foto de cada color es la que se ve en la tienda. Stock vacío = ese talle no existe en ese color.</p>
         <div id="peVars"></div>
@@ -277,15 +327,18 @@ input.is-ok{border-color:var(--ok)}
   <!-- ===== AJUSTES ===== -->
   <section id="t-set" role="tabpanel" hidden>
     <h2>Ajustes</h2>
-    <div class="card">
+    <p class="hint" style="margin:-4px 0 12px">Cada sección se guarda por separado: tocar "Guardar" en una no cambia las demás.</p>
+    <div class="card" data-sec="tienda">
       <h3>Tienda</h3>
       <label class="f"><span>Nombre de la marca</span><input type="text" data-k="marca" maxlength="40"></label>
       <label class="f"><span>WhatsApp que recibe los pedidos</span><input type="tel" data-k="numero" inputmode="numeric" placeholder="5493774123456">
         <small>549 + característica sin 0 + número sin 15.</small></label>
       <label class="f"><span>Texto bajo la marca</span><textarea data-k="lede" maxlength="200" placeholder="Vacío = texto por defecto"></textarea></label>
+      <button class="btn full secsave" data-save="tienda">Guardar tienda</button>
+      <div data-msg="tienda"></div>
     </div>
 
-    <div class="card">
+    <div class="card" data-sec="meta">
       <h3>Meta (Pixel y API de Conversiones)</h3>
       <label class="f"><span>ID del Pixel</span><input type="text" data-k="pixelId" inputmode="numeric" placeholder="123456789012345"></label>
       <label class="check"><input type="checkbox" id="sSameDs" checked> Usar el mismo ID para la API de Conversiones</label>
@@ -298,9 +351,11 @@ input.is-ok{border-color:var(--ok)}
       <label class="f mt-s"><span>Fuente de la compra</span>
         <select data-k="capiFuenteCompra"><option value="website">website (cuenta para campañas de sitio web)</option><option value="chat">chat</option></select></label>
       <label class="f"><span>Versión de la Graph API</span><input type="text" data-k="graphVersion" placeholder="v25.0"></label>
+      <button class="btn full secsave" data-save="meta">Guardar Meta</button>
+      <div data-msg="meta"></div>
     </div>
 
-    <div class="card">
+    <div class="card" data-sec="textos">
       <h3>Textos de la tienda</h3>
       <label class="f"><span>Barra de arriba</span><input type="text" data-k="promoTexto" maxlength="120"></label>
       <label class="f"><span>Qué da el código promocional</span><input type="text" data-k="promoBeneficio" maxlength="80" placeholder="Vacío = el código solo identifica el pedido"></label>
@@ -311,16 +366,17 @@ input.is-ok{border-color:var(--ok)}
       <label class="f"><span>Respuesta: ¿Cómo pago?</span><textarea data-k="pagoTexto" maxlength="400" placeholder="Vacío = texto por defecto"></textarea></label>
       <label class="f"><span>Respuesta: ¿Y si no me queda el talle?</span><textarea data-k="cambioTexto" maxlength="400" placeholder="Vacío = texto por defecto"></textarea></label>
       <label class="f"><span>Mostrar "Quedan N" desde</span><input type="number" data-k="stockBajo" min="0" max="99"></label>
+      <button class="btn full secsave" data-save="textos">Guardar textos</button>
+      <div data-msg="textos"></div>
     </div>
 
-    <div class="card">
+    <div class="card" data-sec="avisos">
       <h3>Avisos de ventas recientes</h3>
       <label class="check"><input type="checkbox" data-k="mostrarVentasRecientes" data-bool> Mostrar mis ventas reales en la tienda</label>
       <label class="f mt-s"><span>Mostrar ventas de los últimos (días)</span><input type="number" data-k="ventasRecientesDias" min="1" max="90"></label>
+      <button class="btn full secsave" data-save="avisos">Guardar avisos</button>
+      <div data-msg="avisos"></div>
     </div>
-
-    <div class="savebar"><button class="btn full" id="sSave">Guardar ajustes</button></div>
-    <div id="sMsg"></div>
 
     <div class="card mt">
       <h3>Reseñas</h3>
@@ -482,7 +538,7 @@ input.is-ok{border-color:var(--ok)}
   function loadCatalog() {
     return api('adminCatalogo').then(function (d) {
       ST.cat = d;
-      renderProducts(); fillSettings(); renderReviews();
+      renderProducts(); fillSettings(); renderReviews(); fillAddForm(); fillCats();
       $('title').textContent = (d.config && d.config.marca) || 'Panel de la tienda';
     }).catch(function (e) {
       if (String(e.message).indexOf('no-autorizado') === 0) return; // api() ya llevó al ingreso
@@ -492,6 +548,100 @@ input.is-ok{border-color:var(--ok)}
 
   /* ===================== VENTAS ===================== */
   var lookupT = 0, lastLooked = '';
+  ST.items = []; ST.itemsOrig = []; ST.montoManual = false; ST.editItem = -1;
+
+  function cleanItem(it) {
+    return { productoId: String(it.productoId || ''), producto: String(it.producto || ''), color: String(it.color || ''), talle: String(it.talle || ''),
+             cantidad: Math.max(1, Math.min(10, Math.floor(Number(it.cantidad) || 1))), precio: Math.max(0, Number(it.precio) || 0), combo: it.combo ? String(it.combo) : '' };
+  }
+  function itemsTotal() { return ST.items.reduce(function (t, x) { return t + x.precio * x.cantidad; }, 0); }
+  function realProducts() { return ((ST.cat && ST.cat.productos) || []).filter(function (p) { return p.tipo !== 'combo'; }); }
+  function prodOf(id) { return realProducts().filter(function (p) { return p.id === id; })[0]; }
+  function sizeKeys(p, color) { // talles de ese color, con su stock
+    var v = (p.variantes || []).filter(function (x) { return x.color === color; })[0]; return v ? Object.keys(v.stock) : [];
+  }
+  function drawItems() {
+    var box = $('vItems');
+    box.innerHTML = ST.items.length ? ST.items.map(function (x, i) {
+      var p = prodOf(x.productoId), edit = ST.editItem === i && p;
+      var h = '<div class="vitem" data-i="' + i + '"><div><div class="vi-t">' + esc(x.producto || x.productoId) + (x.combo ? ' <span class="badge mut">' + esc(x.combo) + '</span>' : '') + '</div>' +
+        '<div class="vi-s">' + esc(x.color || 'sin color') + ' · ' + (x.talle ? 'talle ' + esc(x.talle) : 'sin talle') + ' · ' + money(x.precio) + ' c/u</div></div>' +
+        '<div class="row" style="gap:6px">' +
+        (x.combo ? '' : '<div class="vqty"><button type="button" data-q="-1" aria-label="Restar una"' + (x.cantidad <= 1 ? ' disabled' : '') + '>−</button><output>' + x.cantidad + '</output><button type="button" data-q="1" aria-label="Sumar una">+</button></div>') +
+        (p ? '<button type="button" class="icon-btn" data-edit aria-label="Cambiar color o talle">✎</button>' : '') +
+        '<button type="button" class="icon-btn" data-del aria-label="Quitar">×</button></div>';
+      if (edit) {
+        h += '<div class="vi-edit"><select data-ec aria-label="Color">' + p.variantes.map(function (v) { return '<option' + (v.color === x.color ? ' selected' : '') + '>' + esc(v.color) + '</option>'; }).join('') + '</select>' +
+          '<select data-et aria-label="Talle"><option value="">Sin talle</option>' + sizeKeys(p, x.color).map(function (t) {
+            var v = p.variantes.filter(function (q) { return q.color === x.color; })[0];
+            return '<option value="' + esc(t) + '"' + (t === x.talle ? ' selected' : '') + '>' + esc(t) + ' (stock ' + (v.stock[t] || 0) + ')</option>';
+          }).join('') + '</select></div>';
+      }
+      return h + '</div>';
+    }).join('') : '<p class="hint">Sin prendas: se registra solo el monto (no descuenta stock).</p>';
+    var orig = JSON.stringify(ST.itemsOrig), cur = JSON.stringify(ST.items);
+    $('vRestore').hidden = !ST.itemsOrig.length || orig === cur;
+    syncMonto();
+  }
+  function syncMonto() {
+    var tot = itemsTotal(), m = num($('vMonto').value);
+    if (!ST.montoManual) $('vMonto').value = tot ? String(Math.round(tot)) : $('vMonto').value;
+    m = num($('vMonto').value);
+    $('vMontoHint').innerHTML = ST.items.length ? 'Suma de las prendas: <b>' + money(tot) + '</b>' + (m !== tot ? ' · <button type="button" class="link" id="vUseTotal">Usar este total</button>' : '') +
+      '<br>Poné lo que realmente cobraste (con descuentos o envío incluido).' : 'Poné lo que realmente cobró.';
+  }
+  $('vMonto').addEventListener('input', function () { ST.montoManual = true; syncMonto(); });
+  $('vMontoHint').addEventListener('click', function (e) {
+    if (e.target.id !== 'vUseTotal') return;
+    ST.montoManual = false; $('vMonto').value = String(Math.round(itemsTotal())); syncMonto();
+  });
+  $('vItems').addEventListener('click', function (e) {
+    var row = e.target.closest('.vitem'); if (!row) return;
+    var i = Number(row.getAttribute('data-i')), x = ST.items[i], q = e.target.closest('[data-q]');
+    if (q) { x.cantidad = Math.max(1, Math.min(10, x.cantidad + Number(q.getAttribute('data-q')))); }
+    else if (e.target.closest('[data-edit]')) { ST.editItem = ST.editItem === i ? -1 : i; }
+    else if (e.target.closest('[data-del]')) {
+      if (x.combo && !confirm('Esta prenda es parte de "' + x.combo + '". ¿Quitarla del pedido?')) return;
+      ST.items.splice(i, 1); ST.editItem = -1;
+    } else return;
+    drawItems();
+  });
+  $('vItems').addEventListener('change', function (e) {
+    var row = e.target.closest('.vitem'); if (!row) return;
+    var x = ST.items[Number(row.getAttribute('data-i'))], p = prodOf(x.productoId);
+    if (e.target.hasAttribute('data-ec')) { x.color = e.target.value; if (p && sizeKeys(p, x.color).indexOf(x.talle) === -1) x.talle = ''; }
+    if (e.target.hasAttribute('data-et')) x.talle = e.target.value;
+    drawItems();
+  });
+  $('vRestore').addEventListener('click', function () { ST.items = ST.itemsOrig.map(cleanItem); ST.editItem = -1; ST.montoManual = false; drawItems(); });
+
+  // --- agregar una prenda que no estaba en el pedido ---
+  function fillAddForm() {
+    var ps = realProducts();
+    $('vaProd').innerHTML = ps.map(function (p) { return '<option value="' + esc(p.id) + '">' + esc(p.nombre) + ' · ' + money(p.precio) + '</option>'; }).join('') || '<option value="">No hay productos</option>';
+    fillAddColor();
+  }
+  function fillAddColor() {
+    var p = prodOf($('vaProd').value);
+    $('vaColor').innerHTML = p ? p.variantes.map(function (v) { return '<option>' + esc(v.color) + '</option>'; }).join('') : '';
+    fillAddTalle();
+  }
+  function fillAddTalle() {
+    var p = prodOf($('vaProd').value), c = $('vaColor').value;
+    var v = p && p.variantes.filter(function (q) { return q.color === c; })[0];
+    $('vaTalle').innerHTML = v ? Object.keys(v.stock).map(function (t) { return '<option value="' + esc(t) + '">' + esc(t) + ' (stock ' + (v.stock[t] || 0) + ')</option>'; }).join('') : '';
+  }
+  $('vaProd').addEventListener('change', fillAddColor);
+  $('vaColor').addEventListener('change', fillAddTalle);
+  $('vaBtn').addEventListener('click', function () {
+    var p = prodOf($('vaProd').value), c = $('vaColor').value, t = $('vaTalle').value;
+    if (!p || !c || !t) { toast('Elegí producto, color y talle', true); return; }
+    var ex = ST.items.filter(function (x) { return !x.combo && x.productoId === p.id && x.color === c && x.talle === t; })[0];
+    if (ex) ex.cantidad = Math.min(10, ex.cantidad + 1);
+    else ST.items.push({ productoId: p.id, producto: p.nombre, color: c, talle: t, cantidad: 1, precio: p.precio, combo: '' });
+    $('vAdd').open = false; drawItems();
+  });
+
   $('vCode').addEventListener('input', function () {
     var raw = this.value, code = extractCode(raw);
     if (raw.length > 8 || /[^A-Za-z0-9\s-]/.test(raw)) this.value = code; // pegó el mensaje entero
@@ -514,9 +664,11 @@ input.is-ok{border-color:var(--ok)}
       if (d.yaVendido) { msg('vCodeMsg', 'bad', 'Este código ya tiene una venta registrada.'); $('vForm').hidden = true; return; }
       msg('vCodeMsg', 'ok', 'Pedido encontrado · ' + esc(fecha(c.fecha)) + (c.campana ? ' · campaña ' + esc(c.campana) : '') + (c.anuncio ? ' · anuncio ' + esc(c.anuncio) : ''));
       $('vPedido').innerHTML = '<div class="items">' + items.map(function (it) {
-        return '<div><span>' + esc(it.cantidad) + 'x ' + esc(it.producto) + ' · ' + esc(it.color) + ' · ' + esc(it.talle) + '</span><b>' + money(it.precio * it.cantidad) + '</b></div>';
+        return '<div><span>' + esc(it.cantidad) + 'x ' + esc(it.producto) + (it.combo ? ' (' + esc(it.combo) + ')' : '') + ' · ' + esc(it.color || '–') + ' · ' + esc(it.talle || 'sin talle') + '</span><b>' + money(it.precio * it.cantidad) + '</b></div>';
       }).join('') + '<div><b>Total del pedido</b><b>' + money(c.valor) + '</b></div></div>';
+      ST.itemsOrig = items.map(cleanItem); ST.items = items.map(cleanItem); ST.editItem = -1; ST.montoManual = false;
       $('vMonto').value = c.valor ? String(Math.round(c.valor)) : '';
+      drawItems();
       $('vForm').hidden = false; $('vTel').focus();
     }).catch(function (e) {
       if (lastLooked !== code) return;
@@ -532,7 +684,8 @@ input.is-ok{border-color:var(--ok)}
     $('vCode').classList.remove('is-ok', 'is-bad'); $('vPedido').innerHTML = ''; ST.pedido = null;
     msg('vCodeMsg', on ? 'warn' : '', on ? 'Sin código, Meta recibe la compra solo con el teléfono: atribuye peor. Usalo solo si el cliente no vino por la tienda.' : '');
     $('vForm').hidden = !on;
-    if (on) { $('vMonto').value = ''; $('vTel').focus(); }
+    ST.items = []; ST.itemsOrig = []; ST.editItem = -1; ST.montoManual = false;
+    if (on) { $('vMonto').value = ''; drawItems(); $('vTel').focus(); }
   });
   function telOk(t) {
     var d = String(t || '').replace(/\D/g, '');
@@ -542,6 +695,41 @@ input.is-ok{border-color:var(--ok)}
     if (d.indexOf('0') === 0) d = d.slice(1);
     return d.length === 10 || d.length === 12;
   }
+  function resetVenta() {
+    $('vCode').value = ''; $('vCode').classList.remove('is-ok'); $('vTel').value = ''; $('vMonto').value = '';
+    $('vPedido').innerHTML = ''; msg('vCodeMsg', '', ''); ST.pedido = null;
+    ST.items = []; ST.itemsOrig = []; ST.editItem = -1; ST.montoManual = false; drawItems();
+    if (!$('vSinCod').checked) $('vForm').hidden = true;
+  }
+  function enviarVenta(btn, extra) {
+    var sinCod = $('vSinCod').checked;
+    var code = sinCod ? '' : $('vCode').value.toUpperCase().replace(/[\s\-]/g, '');
+    var tel = $('vTel').value, monto = num($('vMonto').value), ciudad = $('vCiudad').value.trim();
+    var body = { codigo: code, telefono: tel, monto: monto, ciudad: ciudad, descontarStock: $('vStock').checked, items: ST.items.map(cleanItem), sinItems: !ST.items.length };
+    if (extra) for (var k in extra) body[k] = extra[k];
+    busy(btn, true); msg('vMsg', '', '');
+    return api('registrarVenta', body, 40000).then(function (r) {
+      var capi = r.capi || {};
+      var out = '<b>Venta registrada.</b> ';
+      out += capi.ok ? 'Meta recibió la compra' + (r.conClic ? ' con los datos del clic.' : ' (solo con el teléfono).')
+                     : '<br>Pero Meta NO la recibió: ' + esc(capi.msg || '') + '. Revisá la pestaña Tracking.';
+      var agot = (r.stock || []).filter(function (s) { return s.success && s.stock === 0; }).length;
+      if (agot) out += '<br>' + agot + (agot === 1 ? ' variante quedó' : ' variantes quedaron') + ' sin stock.';
+      var falla = (r.stock || []).filter(function (s) { return !s.success; }).length;
+      if (falla) out += '<br>⚠ ' + falla + (falla === 1 ? ' prenda no se pudo descontar' : ' prendas no se pudieron descontar') + ' del stock (sin talle o variante inexistente). Ajustalo en Productos.';
+      msg('vMsg', capi.ok && !falla ? 'ok' : 'warn', out);
+      toast('Venta registrada');
+      resetVenta(); loadVentas(); loadCatalog();
+      if (loaded.track) loadTracking();
+    }).catch(function (e) {
+      var m = String(e.message);
+      if (m.indexOf('posible-duplicado') === 0) {
+        if (confirm('Ya registraste una venta con el mismo teléfono y monto hace pocos minutos. ¿Es otra venta distinta? Aceptá solo si estás seguro.')) return enviarVenta(btn, { forzar: true });
+        msg('vMsg', 'warn', 'No se registró: parecía una venta repetida.'); return;
+      }
+      msg('vMsg', 'bad', m.indexOf('venta-ya-registrada') === 0 ? 'Ese código ya tiene una venta registrada.' : esc(errText(e)));
+    }).then(function () { busy(btn, false); });
+  }
   $('vBtn').addEventListener('click', function () {
     var btn = this, sinCod = $('vSinCod').checked;
     var code = sinCod ? '' : $('vCode').value.toUpperCase().replace(/[\s\-]/g, '');
@@ -550,35 +738,20 @@ input.is-ok{border-color:var(--ok)}
     if (!telOk(tel)) { $('vTel').classList.add('is-bad'); msg('vMsg', 'bad', 'El teléfono no parece completo: poné la característica y el número.'); return; }
     $('vTel').classList.remove('is-bad');
     if (!(monto > 0)) { msg('vMsg', 'bad', 'Poné el monto cobrado.'); return; }
-    busy(btn, true); msg('vMsg', '', '');
     if (ciudad) ls(KEY_CITY, ciudad);
-    api('registrarVenta', { codigo: code, telefono: tel, monto: monto, ciudad: ciudad, descontarStock: $('vStock').checked }, 40000).then(function (r) {
-      var capi = r.capi || {};
-      var out = '<b>Venta registrada.</b> ';
-      out += capi.ok ? 'Meta recibió la compra' + (r.conClic ? ' con los datos del clic.' : ' (solo con el teléfono).')
-                     : '<br>Pero Meta NO la recibió: ' + esc(capi.msg || '') + '. Revisá la pestaña Tracking.';
-      var agot = (r.stock || []).filter(function (s) { return s.success && s.stock === 0; }).length;
-      if (agot) out += '<br>' + agot + (agot === 1 ? ' variante quedó' : ' variantes quedaron') + ' sin stock.';
-      msg('vMsg', capi.ok ? 'ok' : 'warn', out);
-      toast('Venta registrada');
-      $('vCode').value = ''; $('vCode').classList.remove('is-ok'); $('vTel').value = ''; $('vMonto').value = '';
-      $('vPedido').innerHTML = ''; msg('vCodeMsg', '', ''); ST.pedido = null;
-      if (!$('vSinCod').checked) $('vForm').hidden = true;
-      loadVentas(); loadCatalog();
-      if (loaded.track) loadTracking();
-    }).catch(function (e) {
-      var m = String(e.message);
-      msg('vMsg', 'bad', m.indexOf('venta-ya-registrada') === 0 ? 'Ese código ya tiene una venta registrada.' : esc(errText(e)));
-    }).then(function () { busy(btn, false); });
+    enviarVenta(btn);
   });
   function loadVentas() {
     $('vList').innerHTML = '<li class="empty">Cargando…</li>';
+    var marca = (ST.cat && ST.cat.config && ST.cat.config.marca) || 'VEK';
     api('ultimasVentas', { n: 20 }).then(function (d) {
       var v = d.ventas || [];
       $('vList').innerHTML = v.length ? v.map(function (r) {
-        var ok = r.capi_estado === 'ok';
+        var ok = r.capi_estado === 'ok', tel = String(r.telefono || '').replace(/\D/g, '');
+        var resena = tel ? ' · <a class="link" target="_blank" rel="noopener" style="font-size:13px" href="https://wa.me/' + tel + '?text=' +
+          encodeURIComponent('Hola! Gracias por tu compra en ' + marca + ' 🙌 ¿Nos contás qué te pareció? Si querés, mandanos una foto con la prenda y, con tu permiso, la publicamos en la tienda.') + '">Pedir reseña</a>' : '';
         return '<li><div class="li-main"><div class="li-t">' + money(r.monto) + ' · ' + esc(r.producto || 'Venta') + '</div>' +
-          '<div class="li-s">' + esc(fecha(r.fecha)) + (r.codigo ? ' · ' + esc(r.codigo) : ' · sin código') + (r.ciudad ? ' · ' + esc(r.ciudad) : '') + '</div></div>' +
+          '<div class="li-s">' + esc(fecha(r.fecha)) + (r.codigo ? ' · ' + esc(r.codigo) : ' · sin código') + (r.ciudad ? ' · ' + esc(r.ciudad) : '') + resena + '</div></div>' +
           '<span class="badge ' + (ok ? 'ok' : 'bad') + '" title="' + esc(r.capi_respuesta) + '">' + (ok ? 'Meta ✓' : 'Meta ✗') + '</span></li>';
       }).join('') : '<li class="empty">Todavía no registraste ventas.</li>';
     }).catch(function (e) { $('vList').innerHTML = '<li class="empty">' + esc(errText(e)) + '</li>'; });
@@ -587,15 +760,35 @@ input.is-ok{border-color:var(--ok)}
 
   /* ===================== PRODUCTOS ===================== */
   function stockTotal(p) { var t = 0; (p.variantes || []).forEach(function (v) { for (var k in v.stock) t += Number(v.stock[k]) || 0; }); return t; }
+  function isComboEd() { return !!(ST.edit && ST.edit.tipo === 'combo'); }
+  function allProds() { return (ST.cat && ST.cat.productos) || []; }
+  function pickFor(v) { // producto por defecto de esa parte del combo
+    var ps = allProds().filter(function (x) { return x.tipo !== 'combo' && x.activo; });
+    if (String(v).indexOf('cat:') === 0) {
+      var cat = String(v).slice(4).toLowerCase(), o = ps.filter(function (x) { return String(x.categoria || '').toLowerCase() === cat; });
+      return o.filter(function (x) { return stockTotal(x) > 0; })[0] || o[0];
+    }
+    return allProds().filter(function (x) { return x.id === v; })[0];
+  }
+  function fillCats() {
+    var seen = {}, out = [];
+    allProds().forEach(function (p) { var c = String(p.categoria || '').trim(); if (c && p.tipo !== 'combo' && !seen[c.toLowerCase()]) { seen[c.toLowerCase()] = 1; out.push(c); } });
+    ['Remeras', 'Shorts'].forEach(function (c) { if (!seen[c.toLowerCase()]) out.push(c); });
+    $('cats').innerHTML = out.map(function (c) { return '<option value="' + esc(c) + '">'; }).join('');
+  }
   function renderProducts() {
-    var ps = (ST.cat && ST.cat.productos) || [];
+    var ps = allProds();
     $('pList').innerHTML = ps.length ? ps.map(function (p) {
-      var v = (p.variantes || [])[0] || {}, img = (v.imagenes || [])[0], st = stockTotal(p), off = p.precioAntes > p.precio;
-      return '<li data-id="' + esc(p.id) + '" style="cursor:pointer"><div class="thumb">' + (img ? '<img class="thumb" src="' + esc(img) + '" alt="">' : teeSVG(v.hex)) + '</div>' +
+      var combo = p.tipo === 'combo', off = !combo && p.precioAntes > p.precio, img = '', hex = '';
+      if (combo) { var c0 = (p.componentes || [])[0], q = c0 ? pickFor(c0.cat ? 'cat:' + c0.cat : c0.id) : null; if (q) { var v0 = (q.variantes || [])[0] || {}; img = (v0.imagenes || [])[0]; hex = v0.hex; } }
+      else { var v = (p.variantes || [])[0] || {}; img = (v.imagenes || [])[0]; hex = v.hex; }
+      var st = combo ? 0 : stockTotal(p);
+      var sub = combo ? 'Combo de ' + (p.componentes || []).length + ' prendas' : (p.categoria ? esc(p.categoria) + ' · ' : '') + (p.variantes || []).length + ' colores · stock ' + st;
+      var badge = !p.activo ? '<span class="badge mut">Oculto</span>' : combo ? '<span class="badge ok">Combo</span>' : st > 0 ? '<span class="badge ok">Visible</span>' : '<span class="badge bad">Agotado</span>';
+      return '<li data-id="' + esc(p.id) + '" style="cursor:pointer"><div class="thumb">' + (img ? '<img class="thumb" src="' + esc(img) + '" alt="">' : teeSVG(hex)) + '</div>' +
         '<div class="li-main"><div class="li-t">' + esc(p.nombre) + '</div>' +
-        '<div class="li-s">' + money(p.precio) + (off ? ' <s>' + money(p.precioAntes) + '</s>' : '') + ' · ' + (p.variantes || []).length + ' colores · stock ' + st + '</div></div>' +
-        (off ? '<span class="badge off">Oferta</span> ' : '') +
-        '<span class="badge ' + (!p.activo ? 'mut' : st > 0 ? 'ok' : 'bad') + '">' + (!p.activo ? 'Oculto' : st > 0 ? 'Visible' : 'Agotado') + '</span></li>';
+        '<div class="li-s">' + money(p.precio) + (off ? ' <s>' + money(p.precioAntes) + '</s>' : '') + ' · ' + sub + '</div></div>' +
+        (off ? '<span class="badge off">Oferta</span> ' : '') + badge + '</li>';
     }).join('') : '<li class="empty">No hay productos. Tocá "+ Nuevo".</li>';
   }
   $('pList').addEventListener('click', function (e) {
@@ -604,9 +797,12 @@ input.is-ok{border-color:var(--ok)}
     if (p) openEditor(JSON.parse(JSON.stringify(p)));
   });
   $('pNew').addEventListener('click', function () {
-    openEditor({ id: '', nombre: '', precio: '', precioAntes: '', descripcion: '', calce: 'Regular', tela: '', etiqueta: '', activo: true, orden: '',
+    openEditor({ id: '', tipo: 'producto', categoria: 'Remeras', guiaCols: ['Ancho de pecho', 'Largo'], nombre: '', precio: '', precioAntes: '', descripcion: '', calce: 'Regular', tela: '', etiqueta: '', activo: true, orden: '',
       guia: [{ t: 'S', a: '', l: '' }, { t: 'M', a: '', l: '' }, { t: 'L', a: '', l: '' }, { t: 'XL', a: '', l: '' }],
       variantes: [{ color: 'Negro', hex: '#1E1E22', imagenes: [], stock: {} }] });
+  });
+  $('pNewCombo').addEventListener('click', function () {
+    openEditor({ id: '', tipo: 'combo', componentes: [{ id: '' }, { id: '' }], nombre: '', precio: '', descripcion: '', etiqueta: 'Combo', activo: true, orden: '', guia: [], variantes: [] });
   });
   $('pBack').addEventListener('click', function () { if (dirty && !confirm('Tenés cambios sin guardar. ¿Salir igual?')) return; closeEditor(); });
 
@@ -615,21 +811,70 @@ input.is-ok{border-color:var(--ok)}
   function openEditor(p) {
     ST.edit = p; dirty = false;
     $('pListView').hidden = true; $('pEdit').hidden = false; window.scrollTo(0, 0);
-    $('peTitle').textContent = p.id ? 'Editar producto' : 'Nuevo producto';
     $('peNombre').value = p.nombre || ''; $('pePrecio').value = p.precio || ''; $('peAntes').value = p.precioAntes || '';
     $('peDesc').value = p.descripcion || ''; $('peCalce').value = p.calce || ''; $('peEtiq').value = p.etiqueta || '';
     $('peTela').value = p.tela || ''; $('peActivo').checked = p.activo !== false; $('peOrden').value = p.orden || '';
     $('peDel').hidden = !p.id; msg('peMsg', '', '');
+    var combo = p.tipo === 'combo';
+    ['peAntesBox', 'peCalceBox', 'peTelaBox', 'peCatBox', 'peSizesCard', 'peVarsCard'].forEach(function (id) { $(id).hidden = combo; });
+    $('peComboCard').hidden = !combo; $('pePrecioLbl').textContent = combo ? 'Precio del combo' : 'Precio';
+    $('peTitle').textContent = (combo ? (p.id ? 'Editar combo' : 'Nuevo combo') : (p.id ? 'Editar producto' : 'Nuevo producto'));
+    $('peCat').value = p.categoria || '';
+    p.guiaCols = (p.guiaCols && p.guiaCols.length === 2) ? p.guiaCols : ['Ancho de pecho', 'Largo'];
+    $('peCol1').value = p.guiaCols[0]; $('peCol2').value = p.guiaCols[1]; colsHead();
+    if (combo) { p.slots = (p.componentes || []).map(function (c) { return c.cat ? 'cat:' + c.cat : (c.id || ''); }); renderSlots(); comboPreview(); }
     // Los talles que tienen stock pero no medidas también se muestran (si no, se perderían al guardar)
     p.guia = p.guia || [];
     var seen = {}; p.guia.forEach(function (g) { seen[String(g.t).toUpperCase()] = 1; });
     (p.variantes || []).forEach(function (v) { for (var t in v.stock) if (!seen[t]) { seen[t] = 1; p.guia.push({ t: t, a: '', l: '' }); } });
     renderSizes(); renderVars(); pricePreview();
   }
+  function colsHead() { $('thCol1').textContent = $('peCol1').value || 'Ancho de pecho'; $('thCol2').textContent = $('peCol2').value || 'Largo'; }
+  function setCols(a, b) { $('peCol1').value = a; $('peCol2').value = b; ST.edit.guiaCols = [a, b]; colsHead(); dirty = true; }
+  $('peColsShort').addEventListener('click', function () { setCols('Cintura', 'Largo'); });
+  $('peColsTee').addEventListener('click', function () { setCols('Ancho de pecho', 'Largo'); });
+  ['peCol1', 'peCol2'].forEach(function (id) { $(id).addEventListener('input', function () { ST.edit.guiaCols = [$('peCol1').value.trim(), $('peCol2').value.trim()]; colsHead(); dirty = true; }); });
+  $('peCat').addEventListener('input', function () { dirty = true; });
+
+  // --- combos: qué prendas incluye ---
+  function renderSlots() {
+    var ps = allProds().filter(function (x) { return x.tipo !== 'combo'; }), cats = [], seen = {};
+    ps.forEach(function (x) { var c = String(x.categoria || '').trim(); if (c && !seen[c.toLowerCase()]) { seen[c.toLowerCase()] = 1; cats.push(c); } });
+    var sl = ST.edit.slots;
+    $('peSlots').innerHTML = sl.map(function (v, i) {
+      var known = !v || (v.indexOf('cat:') === 0 ? cats.some(function (c) { return 'cat:' + c.toLowerCase() === v.toLowerCase(); }) : ps.some(function (x) { return x.id === v; }));
+      return '<div class="slotrow"><select data-slot="' + i + '" aria-label="Prenda ' + (i + 1) + '"><option value="">Prenda ' + (i + 1) + ': elegí…</option>' +
+        (known ? '' : '<option value="' + esc(v) + '" selected>(ya no existe) ' + esc(v) + '</option>') +
+        '<optgroup label="Un producto fijo">' + ps.map(function (x) { return '<option value="' + esc(x.id) + '"' + (x.id === v ? ' selected' : '') + '>' + esc(x.nombre) + ' · ' + money(x.precio) + '</option>'; }).join('') + '</optgroup>' +
+        (cats.length ? '<optgroup label="El cliente elige entre una categoría">' + cats.map(function (c) { return '<option value="cat:' + esc(c) + '"' + (v && v.toLowerCase() === 'cat:' + c.toLowerCase() ? ' selected' : '') + '>Cualquiera de: ' + esc(c) + '</option>'; }).join('') + '</optgroup>' : '') +
+        '</select><button class="icon-btn" data-delslot="' + i + '" aria-label="Quitar prenda"' + (sl.length <= 2 ? ' disabled' : '') + '>×</button></div>';
+    }).join('');
+    $('peAddSlot').hidden = sl.length >= 4;
+  }
+  function comboPreview() {
+    if (!isComboEd()) return;
+    var sl = ST.edit.slots, precio = num($('pePrecio').value), picks = sl.map(pickFor), t = '', col = '';
+    if (!precio || picks.some(function (x) { return !x; }) || sl.some(function (v) { return !v; })) { $('peComboPrev').textContent = ''; return; }
+    var sep = picks.reduce(function (a, x) { return a + x.precio; }, 0);
+    if (precio < sep) { t = 'Por separado: ' + money(sep) + ' · el cliente ve ' + Math.round((1 - precio / sep) * 100) + '% OFF y ahorra ' + money(sep - precio); col = '#C62F1B'; }
+    else { t = 'Por separado cuestan ' + money(sep) + ': con ' + money(precio) + ' el combo NO tiene descuento y la tienda no muestra precio anterior.'; col = 'var(--bad)'; }
+    if (sl.some(function (v) { return String(v).indexOf('cat:') === 0; })) t += ' (para las partes por categoría se toma la prenda con stock que aparece primero)';
+    $('peComboPrev').textContent = t; $('peComboPrev').style.color = col;
+  }
+  $('peSlots').addEventListener('change', function (e) {
+    var i = e.target.getAttribute('data-slot'); if (i === null) return;
+    ST.edit.slots[Number(i)] = e.target.value; dirty = true; comboPreview();
+  });
+  $('peSlots').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-delslot]'); if (!b || b.disabled) return;
+    ST.edit.slots.splice(Number(b.getAttribute('data-delslot')), 1); dirty = true; renderSlots(); comboPreview();
+  });
+  $('peAddSlot').addEventListener('click', function () { if (ST.edit.slots.length < 4) { ST.edit.slots.push(''); dirty = true; renderSlots(); } });
   function talles() { return (ST.edit.guia || []).map(function (g) { return String(g.t || '').trim().toUpperCase(); }).filter(Boolean); }
 
   // --- precio y descuento ---
   function pricePreview() {
+    if (isComboEd()) { $('pePrev').textContent = ''; comboPreview(); return; }
     var pr = num($('pePrecio').value), an = num($('peAntes').value);
     var t = '';
     if (an && pr && an > pr) t = 'Descuento: ' + Math.round((1 - pr / an) * 100) + '% OFF · el cliente ahorra ' + money(an - pr);
@@ -762,7 +1007,9 @@ input.is-ok{border-color:var(--ok)}
   // --- guardar / borrar ---
   $('peSave').addEventListener('click', function () {
     var btn = this, p = ST.edit;
+    if (isComboEd()) { guardarCombo(btn); return; }
     var data = {
+      categoria: $('peCat').value.trim(), tipo: 'producto', guiaCols: [$('peCol1').value.trim() || 'Ancho de pecho', $('peCol2').value.trim() || 'Largo'],
       id: p.id || '', nombre: $('peNombre').value.trim(), precio: num($('pePrecio').value), precioAntes: num($('peAntes').value) || '',
       descripcion: $('peDesc').value.trim(), calce: $('peCalce').value.trim(), tela: $('peTela').value.trim(), etiqueta: $('peEtiq').value.trim(),
       activo: $('peActivo').checked, orden: Number($('peOrden').value) || '',
@@ -793,6 +1040,21 @@ input.is-ok{border-color:var(--ok)}
       return loadCatalog().then(function () { if (!sinMed) closeEditor(); else { $('peDel').hidden = false; $('peTitle').textContent = 'Editar producto'; } });
     }).catch(function (e) { msg('peMsg', 'bad', esc(errText(e))); }).then(function () { busy(btn, false); });
   });
+  function guardarCombo(btn) {
+    var p = ST.edit, sl = p.slots.filter(Boolean);
+    var data = { id: p.id || '', tipo: 'combo', nombre: $('peNombre').value.trim(), precio: num($('pePrecio').value), descripcion: $('peDesc').value.trim(),
+                 etiqueta: $('peEtiq').value.trim(), activo: $('peActivo').checked, orden: Number($('peOrden').value) || '', componentes: sl };
+    var err = '';
+    if (!data.nombre) err = 'Poné el nombre del combo.';
+    else if (!(data.precio > 0)) err = 'Poné el precio del combo.';
+    else if (sl.length < 2 || sl.length !== p.slots.length) err = 'Elegí qué prenda va en cada lugar del combo (mínimo 2).';
+    if (err) { msg('peMsg', 'bad', err); $('peMsg').scrollIntoView({ block: 'center', behavior: 'smooth' }); return; }
+    busy(btn, true); msg('peMsg', '', '');
+    api('guardarProducto', { producto: data }, 40000).then(function (r) {
+      toast('Combo guardado'); dirty = false; p.id = r.id;
+      return loadCatalog().then(closeEditor);
+    }).catch(function (e) { msg('peMsg', 'bad', esc(errText(e))); }).then(function () { busy(btn, false); });
+  }
   $('peDel').addEventListener('click', function () {
     var p = ST.edit, btn = this;
     if (!p.id || !confirm('¿Borrar "' + (p.nombre || '') + '" de la tienda? No se puede deshacer. Si solo querés ocultarlo, destildá "Visible en la tienda".')) return;
@@ -842,48 +1104,66 @@ input.is-ok{border-color:var(--ok)}
       .catch(function (e) { msg('tTestMsg', 'bad', esc(errText(e))); }).then(function () { busy(btn, false); });
   });
 
-  /* ===================== AJUSTES ===================== */
-  function fillSettings() {
+  /* ===================== AJUSTES (cada sección se guarda sola) ===================== */
+  var secDirty = {};
+  function cards() { return Array.prototype.slice.call(document.querySelectorAll('#t-set [data-sec]')); }
+  function fillSettings(force) {
     var c = (ST.cat && ST.cat.config) || {};
-    var els = document.querySelectorAll('#t-set [data-k]');
-    for (var i = 0; i < els.length; i++) {
-      var k = els[i].getAttribute('data-k'), v = c[k] == null ? '' : String(c[k]);
-      if (els[i].hasAttribute('data-bool')) els[i].checked = /^(si|sí|true|1)$/i.test(v);
-      else els[i].value = v;
-    }
-    var same = !c.datasetId || c.datasetId === c.pixelId;
-    $('sSameDs').checked = same; $('sDsBox').hidden = same;
-    $('sToken').value = '';
-    $('sTokenState').textContent = ST.cat.capiToken ? 'Token cargado. No se muestra por seguridad.' : 'Todavía no cargaste el token.';
-    $('sTokenState').style.color = ST.cat.capiToken ? 'var(--ok)' : 'var(--bad)';
+    cards().forEach(function (card) {
+      var sec = card.getAttribute('data-sec'); if (secDirty[sec] && !force) return; // no pisar lo que estás editando
+      Array.prototype.slice.call(card.querySelectorAll('[data-k]')).forEach(function (el) {
+        var k = el.getAttribute('data-k'), v = c[k] == null ? '' : String(c[k]);
+        if (el.hasAttribute('data-bool')) el.checked = /^(si|sí|true|1)$/i.test(v); else el.value = v;
+      });
+      if (sec === 'meta') {
+        var same = !c.datasetId || c.datasetId === c.pixelId;
+        $('sSameDs').checked = same; $('sDsBox').hidden = same;
+        $('sToken').value = '';
+        $('sTokenState').textContent = ST.cat.capiToken ? 'Token cargado. No se muestra por seguridad.' : 'Todavía no cargaste el token.';
+        $('sTokenState').style.color = ST.cat.capiToken ? 'var(--ok)' : 'var(--bad)';
+      }
+      card.classList.remove('sec-dirty');
+    });
   }
+  function markDirty(e) {
+    var card = e.target.closest && e.target.closest('#t-set [data-sec]'); if (!card) return;
+    secDirty[card.getAttribute('data-sec')] = true; card.classList.add('sec-dirty');
+  }
+  $('t-set').addEventListener('input', markDirty);
+  $('t-set').addEventListener('change', markDirty);
   $('sSameDs').addEventListener('change', function () { $('sDsBox').hidden = this.checked; });
-  $('sSave').addEventListener('click', function () {
-    var btn = this, vals = {}, els = document.querySelectorAll('#t-set [data-k]');
-    for (var i = 0; i < els.length; i++) {
-      var k = els[i].getAttribute('data-k');
-      vals[k] = els[i].hasAttribute('data-bool') ? (els[i].checked ? 'si' : 'no') : els[i].value.trim();
+  function secMsg(card, kind, text) { var n = card.querySelector('[data-msg]'); n.innerHTML = text ? '<div class="msg ' + kind + '">' + text + '</div>' : ''; }
+  $('t-set').addEventListener('click', function (e) {
+    var btn = e.target.closest('[data-save]'); if (!btn) return;
+    var card = btn.closest('[data-sec]'), sec = card.getAttribute('data-sec'), vals = {};
+    Array.prototype.slice.call(card.querySelectorAll('[data-k]')).forEach(function (el) {
+      vals[el.getAttribute('data-k')] = el.hasAttribute('data-bool') ? (el.checked ? 'si' : 'no') : el.value.trim();
+    });
+    var err = '', tok = '';
+    if (sec === 'tienda') {
+      vals.numero = vals.numero.replace(/\D/g, '');
+      if (vals.numero && !/^549\d{10}$/.test(vals.numero)) err = 'El WhatsApp tiene que ser 549 + característica sin 0 + número sin 15 (13 dígitos).';
     }
-    vals.numero = vals.numero.replace(/\D/g, '');
-    vals.pixelId = vals.pixelId.replace(/\D/g, '');
-    if ($('sSameDs').checked) vals.datasetId = vals.pixelId; else vals.datasetId = vals.datasetId.replace(/\D/g, '');
-    var err = '';
-    if (vals.numero && !/^549\d{10}$/.test(vals.numero)) err = 'El WhatsApp tiene que ser 549 + característica sin 0 + número sin 15 (13 dígitos).';
-    else if (vals.pixelId && !/^\d{10,20}$/.test(vals.pixelId)) err = 'El ID del Pixel son solo números (entre 10 y 20).';
-    else if (vals.datasetId && !/^\d{10,20}$/.test(vals.datasetId)) err = 'El ID del conjunto de datos son solo números.';
-    else if (vals.graphVersion && !/^v\d{2}\.0$/.test(vals.graphVersion)) err = 'La versión de la Graph API tiene el formato v25.0.';
-    var tok = $('sToken').value.trim();
-    if (tok && !/^[A-Za-z0-9]{40,400}$/.test(tok)) err = 'El token no parece completo: copialo entero, sin espacios.';
-    if (err) { msg('sMsg', 'bad', err); return; }
-    busy(btn, true); msg('sMsg', '', '');
-    var pasos = api('setConfig', { valores: vals });
+    if (sec === 'meta') {
+      vals.pixelId = vals.pixelId.replace(/\D/g, '');
+      vals.datasetId = $('sSameDs').checked ? vals.pixelId : (vals.datasetId || '').replace(/\D/g, '');
+      if (vals.pixelId && !/^\d{10,20}$/.test(vals.pixelId)) err = 'El ID del Pixel son solo números (entre 10 y 20).';
+      else if (vals.datasetId && !/^\d{10,20}$/.test(vals.datasetId)) err = 'El ID del conjunto de datos son solo números.';
+      else if (vals.graphVersion && !/^v\d{2}\.0$/.test(vals.graphVersion)) err = 'La versión de la Graph API tiene el formato v25.0.';
+      tok = $('sToken').value.trim();
+      if (tok && !/^[A-Za-z0-9]{40,400}$/.test(tok)) err = 'El token no parece completo: copialo entero, sin espacios.';
+    }
+    if (err) { secMsg(card, 'bad', err); return; }
+    busy(btn, true); secMsg(card, '', '');
+    var pasos = api('setConfig', { valores: vals });   // solo las claves de ESTA sección
     if (tok) pasos = pasos.then(function () { return api('setSecreto', { nombre: 'CAPI_TOKEN', valor: tok }); });
     pasos.then(function () {
-      msg('sMsg', 'ok', 'Ajustes guardados. La tienda los toma en un minuto como máximo.' + (vals.testEventCode ? ' Ojo: el código de prueba sigue activo.' : ''));
-      toast('Ajustes guardados');
+      secDirty[sec] = false;
+      secMsg(card, 'ok', 'Guardado. La tienda lo toma en un minuto como máximo.' + (sec === 'meta' && vals.testEventCode ? ' Ojo: el código de prueba sigue activo.' : ''));
+      toast('Guardado');
       if (loaded.track) loadTracking();
       return loadCatalog();
-    }).catch(function (e) { msg('sMsg', 'bad', esc(errText(e))); }).then(function () { busy(btn, false); });
+    }).catch(function (e) { secMsg(card, 'bad', esc(errText(e))); }).then(function () { busy(btn, false); });
   });
 
   // --- reseñas ---

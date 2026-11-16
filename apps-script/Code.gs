@@ -21,7 +21,9 @@
 
 /* ======================= estructura de la planilla ======================= */
 var H = {
-  Productos: ['id', 'nombre', 'precio', 'precio_antes', 'descripcion', 'calce', 'tela', 'guia_talles', 'etiqueta', 'activo', 'orden'],
+  // categoria / tipo / componentes / guia_cols se agregan al final para no romper planillas ya creadas (setup() las completa).
+  Productos: ['id', 'nombre', 'precio', 'precio_antes', 'descripcion', 'calce', 'tela', 'guia_talles', 'etiqueta', 'activo', 'orden',
+              'categoria', 'tipo', 'componentes', 'guia_cols'],
   // Después de "imagenes", cada columna es un talle. Celda vacía = ese talle no existe para el color; 0 = agotado.
   Variantes: ['producto_id', 'color', 'hex', 'imagenes', 'S', 'M', 'L', 'XL', 'XXL'],
   Config: ['clave', 'valor', 'nota'],
@@ -29,7 +31,7 @@ var H = {
           'fbc', 'fbp', 'ip', 'user_agent', 'pagina', 'fbclid', 'utm_source', 'utm_campaign', 'utm_content',
           'ad_id', 'adset_id', 'campaign_id', 'lead_event_id', 'capi_lead', 'estado', 'items'],
   Ventas: ['fecha', 'codigo', 'telefono', 'monto', 'producto_id', 'producto', 'color', 'talle', 'cantidad',
-           'event_id', 'capi_estado', 'capi_respuesta', 'nota', 'ciudad'],
+           'event_id', 'capi_estado', 'capi_respuesta', 'nota', 'ciudad', 'items'],
   'Reseñas': ['nombre', 'texto', 'foto', 'activo']
 };
 var N_FIJAS_VARIANTES = 4;
@@ -261,6 +263,16 @@ function parseGuia(txt) { // "S:56x70 | M:59x72"  ->  [{t:'S',a:56,l:70}, ...]
   }).filter(Boolean);
 }
 
+function parseComponentes(t) { // "remera-boxy | cat:Shorts"  ->  [{id:'remera-boxy'}, {cat:'Shorts'}]
+  return String(t || '').split('|').map(function (x) { return x.trim(); }).filter(Boolean).slice(0, 4).map(function (x) {
+    return /^cat:/i.test(x) ? { cat: x.replace(/^cat:\s*/i, '').trim() } : { id: x };
+  });
+}
+function parseCols(t) { // "Cintura|Largo" -> ['Cintura','Largo']
+  var a = String(t || '').split('|').map(function (x) { return x.trim().slice(0, 30); });
+  return [a[0] || 'Ancho de pecho', a[1] || 'Largo'];
+}
+
 function armarCatalogo(incluirInactivos) {
   var prods = leer('Productos').rows, vs = leer('Variantes');
   var talles = vs.headers.slice(N_FIJAS_VARIANTES).filter(Boolean);
@@ -284,16 +296,20 @@ function armarCatalogo(incluirInactivos) {
   var lista = prods.filter(function (p) { return p.id && p.nombre && (incluirInactivos || si(p.activo)); })
     .sort(function (a, b) { return (Number(a.orden) || 999) - (Number(b.orden) || 999); })
     .map(function (p) {
+      var combo = String(p.tipo || '').trim().toLowerCase() === 'combo';
       return {
         id: String(p.id).trim(), nombre: String(p.nombre).trim(),
-        precio: Number(p.precio) || 0, precioAntes: Number(p.precio_antes) || 0,
+        tipo: combo ? 'combo' : 'producto', categoria: String(p.categoria || '').trim(),
+        componentes: combo ? parseComponentes(p.componentes) : [],
+        // En un combo el "precio anterior" NO se guarda: la tienda lo calcula con lo que cuestan por separado las prendas elegidas.
+        precio: Number(p.precio) || 0, precioAntes: combo ? 0 : (Number(p.precio_antes) || 0),
         descripcion: String(p.descripcion || ''), calce: String(p.calce || ''), tela: String(p.tela || ''),
-        guia: parseGuia(p.guia_talles), etiqueta: String(p.etiqueta || ''),
+        guia: parseGuia(p.guia_talles), guiaCols: parseCols(p.guia_cols), etiqueta: String(p.etiqueta || ''),
         activo: si(p.activo), orden: Number(p.orden) || 0,
         variantes: porProd[String(p.id).trim()] || []
       };
     })
-    .filter(function (p) { return incluirInactivos || p.variantes.length; });
+    .filter(function (p) { return incluirInactivos || p.tipo === 'combo' || p.variantes.length; });
   var resenas = leer('Reseñas').rows.filter(function (r) { return si(r.activo) && r.texto; })
     .map(function (r) { return { nombre: String(r.nombre || ''), texto: String(r.texto), foto: String(r.foto || '') }; });
   return { productos: lista, resenas: resenas, talles: talles };
@@ -347,6 +363,14 @@ function slug(s) {
 function guardarProducto(p) {
   if (!p || !p.nombre) throw new Error('falta-nombre');
   if (!(Number(p.precio) > 0)) throw new Error('precio-invalido');
+  var esCombo = p.tipo === 'combo', comps = '';
+  if (esCombo) {
+    var arr = Array.isArray(p.componentes) ? p.componentes : String(p.componentes || '').split('|');
+    comps = arr.map(function (x) { return String(x || '').trim().slice(0, 60); }).filter(Boolean).join(' | ');
+    var n = parseComponentes(comps).length;
+    if (n < 2 || n > 4) throw new Error('combo-invalido: un combo tiene entre 2 y 4 prendas');
+  }
+  sincronizarEncabezados(); // por si la planilla es de una versión anterior
   var lock = LockService.getScriptLock(); lock.waitLock(20000);
   try {
     var id = p.id ? slug(p.id) : slug(p.nombre);
@@ -354,9 +378,12 @@ function guardarProducto(p) {
       : (p.guia || []).map(function (g) { return g.t + ':' + g.a + 'x' + g.l; }).join(' | ');
     // descuento: el precio anterior solo se guarda si es mayor al precio actual
     var antes = Number(p.precioAntes) > Number(p.precio) ? Number(p.precioAntes) : '';
-    var fila = [id, String(p.nombre).slice(0, 80), Number(p.precio), antes, String(p.descripcion || '').slice(0, 600),
+    if (esCombo) antes = '';
+    var cols = Array.isArray(p.guiaCols) ? p.guiaCols.join('|') : String(p.guiaCols || '');
+    if (/^\s*Ancho de pecho\s*\|\s*Largo\s*$/i.test(cols)) cols = ''; // lo de siempre: no se guarda
+    var fila = fila_([id, String(p.nombre).slice(0, 80), Number(p.precio), antes, String(p.descripcion || '').slice(0, 600),
                 String(p.calce || ''), String(p.tela || ''), guia, String(p.etiqueta || '').slice(0, 24), p.activo === false ? 'no' : 'si',
-                Number(p.orden) || ''];
+                Number(p.orden) || '', String(p.categoria || '').trim().slice(0, 30), esCombo ? 'combo' : '', comps, cols.slice(0, 70)]);
     var sh = hoja('Productos'), prods = leer('Productos').rows;
     var ex = prods.filter(function (r) { return String(r.id).trim() === id; })[0];
     if (ex) sh.getRange(ex._row, 1, 1, fila.length).setValues([fila]);
@@ -364,7 +391,7 @@ function guardarProducto(p) {
       if (!p.id && prods.some(function (r) { return String(r.id).trim() === id; })) id = id + '-' + Date.now().toString(36);
       fila[0] = id; sh.appendRow(fila);
     }
-    if (Array.isArray(p.variantes)) escribirVariantes(id, p.variantes);
+    if (!esCombo && Array.isArray(p.variantes)) escribirVariantes(id, p.variantes);
     limpiarCache();
     return { success: true, id: id };
   } finally { lock.releaseLock(); }
@@ -450,6 +477,7 @@ function setConfig(valores) {
       if (!/^[a-zA-Z][a-zA-Z0-9_]{0,40}$/.test(k)) return;
       var v = String(valores[k] == null ? '' : valores[k]).slice(0, 500);
       var r = rows.filter(function (x) { return String(x.clave).trim() === k; })[0];
+      v = celda_(v);
       if (r) sh.getRange(r._row, 2).setValue(v); else sh.appendRow([k, v, '']);
     });
     limpiarCache();
@@ -462,7 +490,7 @@ function guardarResenas(lista) {
   var sh = hoja('Reseñas');
   if (sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, H['Reseñas'].length).clearContent();
   var filas = lista.filter(function (r) { return r && r.texto; }).slice(0, 50).map(function (r) {
-    return [String(r.nombre || '').slice(0, 60), String(r.texto).slice(0, 400), /^https:\/\//i.test(r.foto || '') ? r.foto : '', r.activo === false ? 'no' : 'si'];
+    return fila_([String(r.nombre || '').slice(0, 60), String(r.texto).slice(0, 400), /^https:\/\//i.test(r.foto || '') ? r.foto : '', r.activo === false ? 'no' : 'si']);
   });
   if (filas.length) sh.getRange(2, 1, filas.length, 4).setValues(filas);
   limpiarCache();
@@ -507,6 +535,11 @@ function codigoValido(c) {
 /* ======================= clics (públicos) ======================= */
 function txt(v, max) { return String(v == null ? '' : v).replace(/[\u0000-\u001f]/g, ' ').slice(0, max || 200); }
 
+// Un texto que empieza con = + - @ se interpreta como FÓRMULA al escribirlo en la planilla (por ejemplo =IMPORTDATA(...)
+// podría sacar datos). Como los clics son públicos, TODO texto que llega a una celda pasa por acá: el apóstrofe lo deja como texto.
+function celda_(v) { return (typeof v === 'string' && /^[=+\-@]/.test(v)) ? "'" + v : v; }
+function fila_(arr) { return arr.map(celda_); }
+
 function registrarClic(b) {
   var code = normalizarCodigo(b.codigo);
   if (!codigoValido(code)) return { success: false, message: 'codigo-invalido' };
@@ -519,14 +552,15 @@ function registrarClic(b) {
   var c = config();
   var items = limpiarItems(b.items);
   if (!items.length && b.productoId) items = limpiarItems([{ productoId: b.productoId, producto: b.producto, color: b.color, talle: b.talle, cantidad: b.cantidad, precio: b.precio }]);
+  if (!items.length) return { success: false, message: 'pedido-vacio' };
   var i0 = items[0] || {}, unidades = items.reduce(function (s, x) { return s + x.cantidad; }, 0) || 1;
-  var fila = [
-    new Date(), code, txt(b.uuid, 40), i0.productoId || '', txt((i0.producto || '') + (items.length > 1 ? ' +' + (items.length - 1) : ''), 90),
+  var fila = fila_([
+    new Date(), code, txt(b.uuid, 40), i0.productoId || '', txt(resumenItems(items), 90),
     i0.color || '', i0.talle || '', unidades, i0.precio || 0, Number(b.valor) || 0,
     txt(b.fbc, 300), txt(b.fbp, 120), txt(b.ip, 60), txt(b.ua, 400), txt(b.pagina, 500),
     txt(o.fbclid, 300), txt(o.utm_source, 80), txt(o.utm_campaign, 120), txt(o.utm_content, 120),
     txt(o.ad_id, 40), txt(o.adset_id, 40), txt(o.campaign_id, 40), txt(b.leadEventId, 60), '', 'pendiente', JSON.stringify(items)
-  ];
+  ]);
   var lock = LockService.getScriptLock(); lock.waitLock(15000);
   var sh = hoja('Clics'), row;
   try {
@@ -553,10 +587,19 @@ function registrarClic(b) {
 
 function limpiarItems(lista) {
   if (!Array.isArray(lista)) return [];
-  return lista.slice(0, 15).filter(function (x) { return x && x.productoId; }).map(function (x) {
-    return { productoId: txt(x.productoId, 40), producto: txt(x.producto, 80), color: txt(x.color, 40), talle: txt(x.talle, 8),
-             cantidad: Math.max(1, Math.min(10, Math.floor(Number(x.cantidad) || 1))), precio: Number(x.precio) || 0 };
+  return lista.slice(0, 30).filter(function (x) { return x && x.productoId; }).map(function (x) {
+    var o = { productoId: txt(x.productoId, 40), producto: txt(x.producto, 80), color: txt(x.color, 40), talle: txt(x.talle, 8),
+              cantidad: Math.max(1, Math.min(10, Math.floor(Number(x.cantidad) || 1))), precio: Math.max(0, Number(x.precio) || 0) };
+    if (x.combo) o.combo = txt(x.combo, 80);   // la prenda viene de un combo: el precio ya es la parte que le toca del precio del combo
+    return o;
   });
+}
+// Nombre corto del pedido: "Combo Verano +1" (los combos cuentan como una sola cosa)
+function resumenItems(items, alternativo) {
+  var nombres = [], vistos = {};
+  items.forEach(function (x) { var n = x.combo || x.producto || ''; if (n && !vistos[n]) { vistos[n] = 1; nombres.push(n); } });
+  if (!nombres.length) return alternativo || '';
+  return nombres[0] + (nombres.length > 1 ? ' +' + (nombres.length - 1) : '');
 }
 function itemsDelClic(cl) {
   try { var it = limpiarItems(JSON.parse(cl.items || '[]')); if (it.length) return it; } catch (e) {}
@@ -596,7 +639,8 @@ function buscarCodigo(codigo) {
 /**
  * Registra una venta y manda Purchase a Meta.
  * b = { codigo?, telefono, monto, descontarStock (default true),
- *       items?: [{ productoId, color, talle, cantidad }]  // si no viene, se usa el pedido del clic (todo el carrito)
+ *       items?: [{ productoId, producto, color, talle, cantidad, precio, combo? }]  // lo que el cliente compró de verdad; si no viene, se usa el pedido del clic
+ *       forzar?  // registrar aunque parezca una venta repetida (mismo teléfono y monto en 10 minutos)
  *       ciudad?  // opcional: aparece en los avisos de ventas recientes ("Alguien de Curuzú Cuatiá compró…")
  *       nota? }
  */
@@ -619,8 +663,13 @@ function registrarVenta(b) {
       cl = buscarClicPorCodigo(code);
       if (!cl) return { success: false, message: 'codigo-no-encontrado' };
     }
-    items = Array.isArray(b.items) && b.items.length ? b.items
-      : (cl ? itemsDelClic(cl) : []);
+    if (!code && !b.forzar) { // sin código no hay otra forma de detectar un doble toque: mismo teléfono y monto en 10 minutos
+      var ult = leer('Ventas').rows.slice(-30), hace10 = Date.now() - 600000;
+      var rep = ult.some(function (r) { return r.fecha instanceof Date && r.fecha.getTime() > hace10 && String(r.telefono).replace(/\D/g, '') === tel && Math.round(Number(r.monto)) === monto; });
+      if (rep) return { success: false, message: 'posible-duplicado' };
+    }
+    items = b.sinItems ? []   // la PWA quitó todas las prendas: se registra solo el monto
+      : (Array.isArray(b.items) && b.items.length ? limpiarItems(b.items) : (cl ? itemsDelClic(cl) : []));
 
     // stock
     var stockRes = [];
@@ -634,10 +683,10 @@ function registrarVenta(b) {
     eventId = code ? 'purchase_' + code : 'purchase_tel_' + sha256(tel).slice(0, 12) + '_' + Math.floor(Date.now() / 1000);
     var it0 = items[0] || {};
     var sh = hoja('Ventas');
-    var nombreProd = it0.producto || (cl ? String(cl.producto).replace(/\s\+\d+$/, '') : '');
-    sh.appendRow([new Date(), code, "'" + tel, monto, it0.productoId || '', txt(nombreProd + (items.length > 1 ? ' +' + (items.length - 1) : ''), 90),
-                  it0.color || '', it0.talle || '', items.reduce(function (s, x) { return s + (Number(x.cantidad) || 1); }, 0) || 1,
-                  eventId, 'enviando', '', txt(b.nota, 200), txt(b.ciudad, 40)]);
+    var nombreVenta = items.length ? resumenItems(items) : (cl ? String(cl.producto).replace(/\s\+\d+$/, '') : '');
+    sh.appendRow(fila_([new Date(), code, "'" + tel, monto, it0.productoId || '', txt(nombreVenta, 90),
+                  it0.combo ? '' : (it0.color || ''), it0.combo ? '' : (it0.talle || ''), items.reduce(function (s, x) { return s + (Number(x.cantidad) || 1); }, 0) || 1,
+                  eventId, 'enviando', '', txt(b.nota, 200), txt(b.ciudad, 40), JSON.stringify(items)]));
     limpiarCache();   // así el aviso de la venta aparece en la landing
     filaVenta = sh.getLastRow();
     if (cl) hoja('Clics').getRange(cl._row, H.Clics.indexOf('estado') + 1).setValue('vendido');
@@ -655,7 +704,9 @@ function registrarVenta(b) {
     custom_data: {
       currency: 'ARS', value: monto, order_id: code || eventId, content_type: 'product',
       content_ids: items.map(function (x) { return String(x.productoId || ''); }).filter(String),
-      contents: items.filter(function (x) { return x.productoId; }).map(function (x) { return { id: String(x.productoId), quantity: Number(x.cantidad) || 1 }; })
+      contents: items.filter(function (x) { return x.productoId; }).map(function (x) {
+        var o = { id: String(x.productoId), quantity: Number(x.cantidad) || 1 }; if (x.precio > 0) o.item_price = x.precio; return o;
+      })
     }
   };
   if (conClic && ev.action_source === 'website' && cl.pagina) ev.event_source_url = String(cl.pagina);
@@ -746,7 +797,7 @@ function setup() {
 
 // Agrega a hojas ya existentes las columnas nuevas de esta versión (no toca datos).
 function sincronizarEncabezados() {
-  ['Clics', 'Ventas'].forEach(function (n) {
+  ['Productos', 'Clics', 'Ventas'].forEach(function (n) {
     var sh = hoja(n), lc = Math.max(1, sh.getLastColumn()), act = sh.getRange(1, 1, 1, lc).getValues()[0].map(String);
     H[n].forEach(function (h, i) { if (act[i] !== h && act.indexOf(h) === -1) sh.getRange(1, i + 1).setValue(h).setFontWeight('bold'); });
   });
@@ -766,7 +817,12 @@ function cargarEjemplos() {
     { id: 'oversize-lavada', nombre: 'Oversize Lavada', precio: 26000, descripcion: 'Teñido con lavado a la piedra: cada una sale con un tono un poco distinto.',
       calce: 'Oversize', tela: '100% algodón 20/1, más gruesa', guiaTexto: 'S:57x70 | M:60x72 | L:63x74 | XL:66x76', etiqueta: 'Nueva', orden: 3,
       variantes: [{ color: 'Gris lavado', hex: '#6F7073', stock: { S: 1, M: 3, L: 2, XL: 1 } }, { color: 'Marrón lavado', hex: '#6E5848', stock: { S: 0, M: 2, L: 1, XL: 0 } }] }
-  ].forEach(guardarProducto);
+    ,{ id: 'short-de-bano', nombre: 'Short de baño', categoria: 'Shorts', precio: 18000, descripcion: 'Secado rápido, con malla interior y bolsillo con cierre.',
+      calce: 'Regular', tela: 'Poliéster microfibra', guiaTexto: 'S:76x44 | M:80x46 | L:84x48 | XL:88x50', guiaCols: ['Cintura', 'Largo'], orden: 4,
+      variantes: [{ color: 'Azul', hex: '#1F3A6B', stock: { S: 3, M: 5, L: 4, XL: 2 } }, { color: 'Negro', hex: '#1E1E22', stock: { S: 2, M: 4, L: 3, XL: 1 } }] },
+    { id: 'combo-verano', nombre: 'Combo Verano', tipo: 'combo', precio: 33000, descripcion: 'Una remera Clásica y un short de baño. Elegís color y talle de cada uno.',
+      componentes: ['clasica-regular', 'short-de-bano'], etiqueta: 'Combo', orden: 5 }
+  ].map(function (x) { x.categoria = x.categoria || (x.tipo === 'combo' ? '' : 'Remeras'); return x; }).forEach(guardarProducto);
 }
 
 // Ejecutalo con testEventCode cargado en Config para ver el evento en "Probar eventos" de Meta.
