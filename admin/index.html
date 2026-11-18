@@ -284,11 +284,17 @@ input.is-ok{border-color:var(--ok)}
 
       <div class="card" id="peSizesCard">
         <h3>Talles y medidas (cm)</h3>
-        <div class="row">
+        <label class="f"><span>Tipo de prenda (define qué medidas se muestran)</span>
+          <select id="peKind">
+            <option value="remera">Remera / buzo (ancho de pecho + largo)</option>
+            <option value="short">Short de baño / malla (cintura + largo)</option>
+            <option value="otra">Otra prenda (medidas a tu gusto)</option>
+            <option value="nada">Sin tabla de medidas (solo talles)</option>
+          </select></label>
+        <div class="row" id="peColsRow">
           <label class="f grow"><span>Primera medida</span><input type="text" id="peCol1" maxlength="30" placeholder="Ancho de pecho"></label>
-          <label class="f grow"><span>Segunda medida</span><input type="text" id="peCol2" maxlength="30" placeholder="Largo"></label>
+          <label class="f grow"><span>Segunda medida (opcional)</span><input type="text" id="peCol2" maxlength="30" placeholder="Largo"></label>
         </div>
-        <p class="hint" style="margin:-6px 0 10px">Para shorts usá <button class="link" type="button" id="peColsShort">Cintura / Largo</button> · para remeras <button class="link" type="button" id="peColsTee">Ancho de pecho / Largo</button></p>
         <table class="sizetbl"><thead><tr><th>Talle</th><th id="thCol1">Ancho pecho</th><th id="thCol2">Largo</th><th></th></tr></thead><tbody id="peSizes"></tbody></table>
         <button class="link mt-s" id="peAddSize">+ Agregar talle</button>
       </div>
@@ -385,6 +391,14 @@ input.is-ok{border-color:var(--ok)}
       <button class="btn ghost full" id="rAdd">+ Agregar reseña</button>
       <button class="btn full mt" id="rSave">Guardar reseñas</button>
       <div id="rMsg"></div>
+    </div>
+
+    <div class="card">
+      <h3>Respaldo</h3>
+      <p class="hint" style="margin:-4px 0 10px">Tus productos, ajustes y ventas se guardan en la planilla, no en el código: actualizar el código no borra nada. Cada día se hace una copia automática en tu Drive (carpeta "VEK respaldos", últimas 14).</p>
+      <div id="bkList" class="hint"></div>
+      <button class="btn ghost full mt-s" id="bkNow">Hacer un respaldo ahora</button>
+      <div id="bkMsg"></div>
     </div>
 
     <div class="card">
@@ -514,11 +528,27 @@ input.is-ok{border-color:var(--ok)}
     }).catch(function (e) { $('lgPass').value = ''; msg('lgMsg', 'bad', esc(errText(e))); }).then(function () { busy(btn, false); });
   });
 
+  var NEED_VERSION = 6;
+  function loadBackups() {
+    api('listarRespaldos').then(function (j) {
+      var l = j.respaldos || [];
+      $('bkList').textContent = l.length ? 'Último respaldo: ' + l[0].nombre.replace('Respaldo ', '') + ' · ' + l.length + ' guardados' : 'Todavía no hay respaldos (el primero se hace esta noche, o tocá el botón).';
+    }).catch(function () { $('bkList').textContent = 'Los respaldos se activan al actualizar el Code.gs y ejecutar setup().'; });
+  }
+  $('bkNow').addEventListener('click', function () {
+    var b = this; busy(b, true); msg('bkMsg', '', '');
+    api('respaldar', {}, 60000).then(function (r) { msg('bkMsg', 'ok', 'Respaldo creado: ' + esc(r.nombre)); loadBackups(); })
+      .catch(function (e) { msg('bkMsg', 'bad', esc(errText(e))); }).then(function () { busy(b, false); });
+  });
   function start() {
     $('login').hidden = true; $('app').hidden = false;
     $('sSession').textContent = 'Sesión abierta en este dispositivo. Apps Script …' + ST.url.replace(/^.*\/s\/(.{8}).*$/, '$1') + '. La sesión dura 30 días.';
     $('vCiudad').value = ls(KEY_CITY) || '';
-    api('ping').then(function (j) { if (j.planilla) { $('sPlanilla').href = j.planilla; $('sPlanilla').hidden = false; } }).catch(function () {});
+    api('ping').then(function (j) {
+      if (j.planilla) { $('sPlanilla').href = j.planilla; $('sPlanilla').hidden = false; }
+      if ((j.version || 0) < NEED_VERSION) toast('Tu Apps Script está desactualizado: pegá el Code.gs nuevo, ejecutá setup() y publicá una nueva versión.', true);
+    }).catch(function () {});
+    loadBackups();
     loadCatalog();
     loadVentas();
   }
@@ -797,7 +827,7 @@ input.is-ok{border-color:var(--ok)}
     if (p) openEditor(JSON.parse(JSON.stringify(p)));
   });
   $('pNew').addEventListener('click', function () {
-    openEditor({ id: '', tipo: 'producto', categoria: 'Remeras', guiaCols: ['Ancho de pecho', 'Largo'], nombre: '', precio: '', precioAntes: '', descripcion: '', calce: 'Regular', tela: '', etiqueta: '', activo: true, orden: '',
+    openEditor({ id: '', tipo: 'producto', categoria: '', guiaCols: ['Ancho de pecho', 'Largo'], nombre: '', precio: '', precioAntes: '', descripcion: '', calce: 'Regular', tela: '', etiqueta: '', activo: true, orden: '',
       guia: [{ t: 'S', a: '', l: '' }, { t: 'M', a: '', l: '' }, { t: 'L', a: '', l: '' }, { t: 'XL', a: '', l: '' }],
       variantes: [{ color: 'Negro', hex: '#1E1E22', imagenes: [], stock: {} }] });
   });
@@ -820,8 +850,8 @@ input.is-ok{border-color:var(--ok)}
     $('peComboCard').hidden = !combo; $('pePrecioLbl').textContent = combo ? 'Precio del combo' : 'Precio';
     $('peTitle').textContent = (combo ? (p.id ? 'Editar combo' : 'Nuevo combo') : (p.id ? 'Editar producto' : 'Nuevo producto'));
     $('peCat').value = p.categoria || '';
-    p.guiaCols = (p.guiaCols && p.guiaCols.length === 2) ? p.guiaCols : ['Ancho de pecho', 'Largo'];
-    $('peCol1').value = p.guiaCols[0]; $('peCol2').value = p.guiaCols[1]; colsHead();
+    p.guiaCols = Array.isArray(p.guiaCols) && p.guiaCols.length <= 2 ? p.guiaCols : ['Ancho de pecho', 'Largo'];
+    var k = kindOf(p.guiaCols); $('peKind').value = k; applyKind(k, true);
     if (combo) { p.slots = (p.componentes || []).map(function (c) { return c.cat ? 'cat:' + c.cat : (c.id || ''); }); renderSlots(); comboPreview(); }
     // Los talles que tienen stock pero no medidas también se muestran (si no, se perderían al guardar)
     p.guia = p.guia || [];
@@ -829,11 +859,36 @@ input.is-ok{border-color:var(--ok)}
     (p.variantes || []).forEach(function (v) { for (var t in v.stock) if (!seen[t]) { seen[t] = 1; p.guia.push({ t: t, a: '', l: '' }); } });
     renderSizes(); renderVars(); pricePreview();
   }
-  function colsHead() { $('thCol1').textContent = $('peCol1').value || 'Ancho de pecho'; $('thCol2').textContent = $('peCol2').value || 'Largo'; }
-  function setCols(a, b) { $('peCol1').value = a; $('peCol2').value = b; ST.edit.guiaCols = [a, b]; colsHead(); dirty = true; }
-  $('peColsShort').addEventListener('click', function () { setCols('Cintura', 'Largo'); });
-  $('peColsTee').addEventListener('click', function () { setCols('Ancho de pecho', 'Largo'); });
-  ['peCol1', 'peCol2'].forEach(function (id) { $(id).addEventListener('input', function () { ST.edit.guiaCols = [$('peCol1').value.trim(), $('peCol2').value.trim()]; colsHead(); dirty = true; }); });
+  // --- tipo de prenda: define qué columnas de medidas tiene la tabla de talles ---
+  var PRESETS = { remera: ['Ancho de pecho', 'Largo'], short: ['Cintura', 'Largo'] }, CAT_KIND = { remera: 'Remeras', short: 'Mallas' };
+  function kindOf(cols) {
+    if (!cols.length) return 'nada';
+    if (cols.length === 2 && /^ancho de pecho$/i.test(cols[0]) && /^largo$/i.test(cols[1])) return 'remera';
+    if (cols.length === 2 && /^cintura$/i.test(cols[0]) && /^largo$/i.test(cols[1])) return 'short';
+    return 'otra';
+  }
+  function colsNow() {
+    var k = $('peKind').value;
+    if (k === 'nada') return [];
+    return [$('peCol1').value.trim(), $('peCol2').value.trim()].filter(Boolean).slice(0, 2);
+  }
+  function colsHead() {
+    var c = colsNow();
+    $('thCol1').hidden = c.length < 1; $('thCol2').hidden = c.length < 2;
+    $('thCol1').textContent = c[0] || ''; $('thCol2').textContent = c[1] || '';
+    $('peColsRow').hidden = $('peKind').value === 'nada';
+    $('peCol1').readOnly = $('peCol2').readOnly = false;
+  }
+  function applyKind(k, silent) { // silent: al abrir un producto existente no se pisa nada
+    if (PRESETS[k] && !silent) { $('peCol1').value = PRESETS[k][0]; $('peCol2').value = PRESETS[k][1]; }
+    else if (PRESETS[k]) { $('peCol1').value = ST.edit.guiaCols[0] || PRESETS[k][0]; $('peCol2').value = ST.edit.guiaCols[1] || PRESETS[k][1]; }
+    else if (k === 'otra') { if (!silent && kindOf([$('peCol1').value, $('peCol2').value]) !== 'otra') { $('peCol1').value = ''; $('peCol2').value = ''; } else { $('peCol1').value = ST.edit.guiaCols[0] || ''; $('peCol2').value = ST.edit.guiaCols[1] || ''; } }
+    else { if (silent) { $('peCol1').value = ''; $('peCol2').value = ''; } }
+    if (!silent && CAT_KIND[k] && !$('peCat').value.trim()) { $('peCat').value = CAT_KIND[k]; }
+    colsHead(); renderSizes();
+  }
+  $('peKind').addEventListener('change', function () { applyKind(this.value, false); dirty = true; });
+  ['peCol1', 'peCol2'].forEach(function (id) { $(id).addEventListener('input', function () { colsHead(); renderSizes(); dirty = true; }); });
   $('peCat').addEventListener('input', function () { dirty = true; });
 
   // --- combos: qué prendas incluye ---
@@ -887,10 +942,11 @@ input.is-ok{border-color:var(--ok)}
 
   // --- talles ---
   function renderSizes() {
-    $('peSizes').innerHTML = ST.edit.guia.map(function (g, i) {
+    $('peSizes').innerHTML = (ST.edit.guia || []).map(function (g, i) {
+      var c = colsNow();
       return '<tr><td><input type="text" data-g="' + i + '" data-f="t" value="' + esc(g.t) + '" maxlength="8" style="text-transform:uppercase"></td>' +
-        '<td><input type="text" inputmode="decimal" data-g="' + i + '" data-f="a" value="' + esc(g.a) + '" placeholder="cm"></td>' +
-        '<td><input type="text" inputmode="decimal" data-g="' + i + '" data-f="l" value="' + esc(g.l) + '" placeholder="cm"></td>' +
+        (c.length > 0 ? '<td><input type="text" inputmode="decimal" data-g="' + i + '" data-f="a" value="' + esc(g.a) + '" placeholder="cm"></td>' : '') +
+        (c.length > 1 ? '<td><input type="text" inputmode="decimal" data-g="' + i + '" data-f="l" value="' + esc(g.l) + '" placeholder="cm"></td>' : '') +
         '<td><button class="icon-btn" data-delg="' + i + '" aria-label="Quitar talle">×</button></td></tr>';
     }).join('');
   }
@@ -1009,11 +1065,12 @@ input.is-ok{border-color:var(--ok)}
     var btn = this, p = ST.edit;
     if (isComboEd()) { guardarCombo(btn); return; }
     var data = {
-      categoria: $('peCat').value.trim(), tipo: 'producto', guiaCols: [$('peCol1').value.trim() || 'Ancho de pecho', $('peCol2').value.trim() || 'Largo'],
+      categoria: $('peCat').value.trim(), tipo: 'producto', guiaCols: colsNow(),
       id: p.id || '', nombre: $('peNombre').value.trim(), precio: num($('pePrecio').value), precioAntes: num($('peAntes').value) || '',
       descripcion: $('peDesc').value.trim(), calce: $('peCalce').value.trim(), tela: $('peTela').value.trim(), etiqueta: $('peEtiq').value.trim(),
       activo: $('peActivo').checked, orden: Number($('peOrden').value) || '',
-      guia: p.guia.filter(function (g) { return g.t; }).map(function (g) { return { t: String(g.t).toUpperCase(), a: num(g.a), l: num(g.l) }; }).filter(function (g) { return g.a && g.l; }),
+      guia: colsNow().length ? p.guia.filter(function (g) { return g.t; }).map(function (g) { return { t: String(g.t).toUpperCase(), a: num(g.a), l: colsNow().length > 1 ? num(g.l) : 0 }; })
+        .filter(function (g) { return g.a && (colsNow().length < 2 || g.l); }) : [],
       variantes: p.variantes.map(function (v) {
         var st = {}; talles().forEach(function (t) { if (v.stock[t] !== undefined && v.stock[t] !== '') st[t] = v.stock[t]; });
         return { color: String(v.color || '').trim(), hex: validHex(v.hex), imagenes: v.imagenes || [], stock: st };
@@ -1031,7 +1088,7 @@ input.is-ok{border-color:var(--ok)}
     else if (data.variantes.every(function (v) { return !Object.keys(v.stock).length; })) err = 'Cargá el stock de al menos un talle (aunque sea 0).';
     if (err) { msg('peMsg', 'bad', err); $('peMsg').scrollIntoView({ block: 'center', behavior: 'smooth' }); return; }
     // talles sin medidas: se guardan igual, pero sin tabla
-    var sinMed = p.guia.filter(function (g) { return g.t && !(num(g.a) && num(g.l)); }).length;
+    var nc = colsNow().length, sinMed = nc ? p.guia.filter(function (g) { return g.t && !(num(g.a) && (nc < 2 || num(g.l))); }).length : 0;
     busy(btn, true); msg('peMsg', '', '');
     api('guardarProducto', { producto: data }, 40000).then(function (r) {
       toast('Producto guardado');

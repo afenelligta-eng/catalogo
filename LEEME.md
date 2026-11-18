@@ -117,3 +117,12 @@ una campaña de sitio web. Probalo con las primeras ventas en el Administrador d
 - **Ajustes**: cada sección (Tienda, Meta, Textos…) tiene su propio botón Guardar; guardar una no toca las demás.
 - **Reseñas**: usá "Pedir reseña" tras cada venta para juntar reseñas reales. No se cargan reseñas ni avisos de compra inventados (Meta puede cerrar la cuenta publicitaria y es publicidad engañosa). El aviso de "compró recientemente" usa ventas reales.
 - **Seguridad**: protección contra fórmulas en la planilla, límite de clics por IP, sesiones con hash. Dejá la planilla en acceso *Restringido* y cambiá la contraseña inicial desde el panel.
+
+## Mallas, shorts y otras prendas
+En Productos → + Nuevo, elegí **Tipo de prenda**: remera (pecho/largo), short o malla (cintura/largo), otra (medidas a tu gusto, 1 o 2) o sin tabla de medidas (solo talles). La categoría se propone sola (Remeras / Mallas).
+
+## Que no se pierda nada
+- Productos, ajustes, ventas, reseñas y contraseña viven en la planilla y en las Propiedades del script, **no en el código**. Cambiar Code.gs o la landing no los borra.
+- Al actualizar Code.gs: pegarlo → `setup()` → *Implementar → Administrar implementaciones → lápiz → Versión: Nueva versión → Implementar*. **No** uses "Nueva implementación": cambia la URL.
+- `setup()` activa un respaldo diario (copia de la planilla en Drive, carpeta "VEK respaldos", últimas 14). En Ajustes → Respaldo podés hacer uno a mano. Para volver atrás: `restaurarDesde('ID_DE_LA_COPIA')` desde el editor.
+- La PWA avisa si tu Apps Script es más viejo que ella.

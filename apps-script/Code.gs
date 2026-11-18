@@ -61,6 +61,7 @@ var CONFIG_DEFAULT = [
 var CONFIG_PUBLICA = ['marca', 'numero', 'pixelId', 'promoTexto', 'promoBeneficio', 'lede', 'envioCorto', 'cambioCorto',
                       'pagoCorto', 'envioTexto', 'cambioTexto', 'pagoTexto', 'stockBajo'];
 
+var VERSION = 6; // la PWA avisa si tu Apps Script es más viejo que ella
 var CODE_CHARS = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
 
 /* ======================= entradas web ======================= */
@@ -68,7 +69,7 @@ function doGet(e) {
   var a = (e && e.parameter && e.parameter.action) || '';
   try {
     if (a === 'getCatalog') return json(catalogoPublico());
-    if (a === 'ping') return json({ success: true, t: new Date().toISOString() });
+    if (a === 'ping') return json({ success: true, t: new Date().toISOString(), version: VERSION });
     return json({ success: false, message: 'accion-desconocida' });
   } catch (err) {
     return json({ success: false, message: String(err && err.message || err) });
@@ -104,7 +105,9 @@ function doPost(e) {
       case 'setSecreto':      return json(setSecreto(b.nombre, b.valor));
       case 'diagnostico':     return json(diagnostico());
       case 'probarEvento':    return json(probarEvento());
-      case 'ping':            return json({ success: true, planilla: SpreadsheetApp.getActiveSpreadsheet().getUrl() });
+      case 'respaldar':       return json(respaldar_('manual'));
+      case 'listarRespaldos': return json(listarRespaldos_());
+      case 'ping':            return json({ success: true, version: VERSION, planilla: SpreadsheetApp.getActiveSpreadsheet().getUrl() });
     }
     return json({ success: false, message: 'accion-desconocida' });
   } catch (err) {
@@ -258,8 +261,8 @@ function si(v) { var s = String(v).trim().toLowerCase(); return s === 'si' || s 
 /* ======================= catálogo ======================= */
 function parseGuia(txt) { // "S:56x70 | M:59x72"  ->  [{t:'S',a:56,l:70}, ...]
   return String(txt || '').split(/[|;\n]/).map(function (s) {
-    var m = s.trim().match(/^([^:]+):\s*(\d+(?:[.,]\d+)?)\s*[x×]\s*(\d+(?:[.,]\d+)?)/i);
-    return m ? { t: m[1].trim(), a: Number(m[2].replace(',', '.')), l: Number(m[3].replace(',', '.')) } : null;
+    var m = s.trim().match(/^([^:]+):\s*(\d+(?:[.,]\d+)?)(?:\s*[x×]\s*(\d+(?:[.,]\d+)?))?/i); // "S:56x70" (2 medidas) o "S:76" (1 medida)
+    return m ? { t: m[1].trim(), a: Number(m[2].replace(',', '.')), l: m[3] ? Number(m[3].replace(',', '.')) : 0 } : null;
   }).filter(Boolean);
 }
 
@@ -269,8 +272,10 @@ function parseComponentes(t) { // "remera-boxy | cat:Shorts"  ->  [{id:'remera-b
   });
 }
 function parseCols(t) { // "Cintura|Largo" -> ['Cintura','Largo']
-  var a = String(t || '').split('|').map(function (x) { return x.trim().slice(0, 30); });
-  return [a[0] || 'Ancho de pecho', a[1] || 'Largo'];
+  var raw = String(t || '').trim();
+  if (raw === '-') return []; // sin tabla de medidas
+  var a = raw.split('|').map(function (x) { return x.trim().slice(0, 30); }).filter(Boolean);
+  return a.length ? a.slice(0, 2) : ['Ancho de pecho', 'Largo'];
 }
 
 function armarCatalogo(incluirInactivos) {
@@ -375,11 +380,11 @@ function guardarProducto(p) {
   try {
     var id = p.id ? slug(p.id) : slug(p.nombre);
     var guia = p.guiaTexto != null ? String(p.guiaTexto)
-      : (p.guia || []).map(function (g) { return g.t + ':' + g.a + 'x' + g.l; }).join(' | ');
+      : (p.guia || []).map(function (g) { return g.t + ':' + g.a + (Number(g.l) ? 'x' + g.l : ''); }).join(' | ');
     // descuento: el precio anterior solo se guarda si es mayor al precio actual
     var antes = Number(p.precioAntes) > Number(p.precio) ? Number(p.precioAntes) : '';
     if (esCombo) antes = '';
-    var cols = Array.isArray(p.guiaCols) ? p.guiaCols.join('|') : String(p.guiaCols || '');
+    var cols = Array.isArray(p.guiaCols) ? (p.guiaCols.filter(Boolean).length ? p.guiaCols.filter(Boolean).join('|') : '-') : String(p.guiaCols || '');
     if (/^\s*Ancho de pecho\s*\|\s*Largo\s*$/i.test(cols)) cols = ''; // lo de siempre: no se guarda
     var fila = fila_([id, String(p.nombre).slice(0, 80), Number(p.precio), antes, String(p.descripcion || '').slice(0, 600),
                 String(p.calce || ''), String(p.tela || ''), guia, String(p.etiqueta || '').slice(0, 24), p.activo === false ? 'no' : 'si',
@@ -792,6 +797,7 @@ function setup() {
   Logger.log(props.getProperty('ADMIN_HASH') ? 'Acceso del panel configurado (usuario: ' + props.getProperty('ADMIN_USER') + ').'
                                              : 'FALTA el acceso del panel: ejecutá crearAcceso() (archivo Acceso.gs).');
   Logger.log('Falta agregar CAPI_TOKEN en Propiedades del script: ' + (props.getProperty('CAPI_TOKEN') ? 'ya está' : 'SÍ, falta'));
+  try { activarRespaldoDiario(); } catch (e) { Logger.log('No pude activar el respaldo diario: ' + e.message); }
   limpiarCache();
 }
 
@@ -801,6 +807,53 @@ function sincronizarEncabezados() {
     var sh = hoja(n), lc = Math.max(1, sh.getLastColumn()), act = sh.getRange(1, 1, 1, lc).getValues()[0].map(String);
     H[n].forEach(function (h, i) { if (act[i] !== h && act.indexOf(h) === -1) sh.getRange(1, i + 1).setValue(h).setFontWeight('bold'); });
   });
+}
+
+/* ======================= respaldos (nada se pierde) =======================
+ * Tus datos viven en la planilla y en las Propiedades del script, NO en el código: pegar un Code.gs nuevo
+ * (y publicar una versión nueva de la misma implementación) no borra productos, ajustes, ventas ni contraseña.
+ * Además, cada día se guarda una copia completa de la planilla en la carpeta de Drive "VEK respaldos"
+ * (se conservan las últimas 14). Para volver atrás: abrí una copia y, si hace falta, ejecutá restaurarDesde('ID_DE_LA_COPIA').
+ */
+var HOJAS_RESPALDO = ['Productos', 'Variantes', 'Config', 'Reseñas'];
+function carpetaRespaldos_() {
+  var it = DriveApp.getFoldersByName('VEK respaldos');
+  return it.hasNext() ? it.next() : DriveApp.createFolder('VEK respaldos');
+}
+function respaldar_(tipo) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet(), tz = Session.getScriptTimeZone() || 'America/Argentina/Buenos_Aires';
+  var nombre = 'Respaldo ' + (tipo === 'manual' ? 'manual ' : '') + Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd HH:mm');
+  var f = DriveApp.getFileById(ss.getId()).makeCopy(nombre, carpetaRespaldos_());
+  // se conservan las 14 más nuevas (las manuales cuentan igual)
+  var todos = [], it = carpetaRespaldos_().getFiles();
+  while (it.hasNext()) { var x = it.next(); if (/^Respaldo /.test(x.getName())) todos.push(x); }
+  todos.sort(function (a, b) { return b.getDateCreated() - a.getDateCreated(); });
+  todos.slice(14).forEach(function (x) { x.setTrashed(true); });
+  return { success: true, nombre: nombre, id: f.getId(), url: f.getUrl() };
+}
+function listarRespaldos_() {
+  var out = [], it = carpetaRespaldos_().getFiles();
+  while (it.hasNext()) { var x = it.next(); if (/^Respaldo /.test(x.getName())) out.push({ nombre: x.getName(), fecha: x.getDateCreated().toISOString(), url: x.getUrl() }); }
+  out.sort(function (a, b) { return a.fecha < b.fecha ? 1 : -1; });
+  return { success: true, respaldos: out.slice(0, 14) };
+}
+function respaldoDiario() { respaldar_('auto'); }
+function activarRespaldoDiario() { // idempotente: no duplica el disparador
+  var ya = ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === 'respaldoDiario'; });
+  if (!ya) ScriptApp.newTrigger('respaldoDiario').timeBased().everyDays(1).atHour(4).create();
+}
+// Solo desde el editor de Apps Script. Reemplaza el contenido de Productos, Variantes, Config y Reseñas por el de una copia.
+function restaurarDesde(idCopia) {
+  if (!idCopia) throw new Error('Pasá el ID de la copia: restaurarDesde("ID")');
+  respaldar_('manual'); // antes de tocar nada, se guarda el estado actual
+  var src = SpreadsheetApp.openById(idCopia), dst = SpreadsheetApp.getActiveSpreadsheet();
+  HOJAS_RESPALDO.forEach(function (n) {
+    var a = src.getSheetByName(n), b = dst.getSheetByName(n); if (!a || !b) return;
+    var v = a.getDataRange().getValues(); b.clearContents();
+    b.getRange(1, 1, v.length, v[0].length).setValues(v);
+  });
+  limpiarCache();
+  return 'Restaurado.';
 }
 
 // Productos de ejemplo. Borralos desde la PWA o directamente de las hojas Productos y Variantes.

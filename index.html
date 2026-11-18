@@ -868,7 +868,7 @@ window.TIENDA = {
     $('pDesc').textContent = p.descripcion || '';
     $('pMeta').innerHTML = [p.calce ? 'Calce: <b>' + esc(p.calce) + '</b>' : '', p.tela ? esc(p.tela) : ''].filter(Boolean).join(' · ');
     $('guide').hidden = true; $('guideBtn').setAttribute('aria-expanded', 'false');
-    $('guideBtn').hidden = !(p.guia && p.guia.length);
+    $('guideBtn').hidden = !(p.guia && p.guia.length && p.guiaCols.length);
     $('sizeBox').classList.remove('is-bad');
     renderVariant();
     showDlg('pd', '#' + encodeURIComponent(id));
@@ -900,10 +900,10 @@ window.TIENDA = {
   // stock disponible del talle para este color, descontando lo que ya está en el pedido
   function avail(t) { var v = S.prod.variantes[S.vi]; return v ? Math.max(0, (Number(v.stock[t]) || 0) - inCart(S.prod.id, v.color, t)) : 0; }
   function guideHTML(p, sel) {
-    if (!p.guia || !p.guia.length) return '';
     var cols = p.guiaCols || ['Ancho de pecho', 'Largo'], pecho = /pecho/i.test(cols[0]);
-    return '<table><thead><tr><th scope="col">Talle</th><th scope="col">' + esc(cols[0]) + '</th><th scope="col">' + esc(cols[1]) + '</th></tr></thead><tbody>' +
-      p.guia.map(function (g) { return '<tr' + (g.t === sel ? ' class="on"' : '') + '><th scope="row">' + esc(g.t) + '</th><td>' + esc(g.a) + ' cm</td><td>' + esc(g.l) + ' cm</td></tr>'; }).join('') +
+    if (!p.guia || !p.guia.length || !cols.length) return '';
+    return '<table><thead><tr><th scope="col">Talle</th>' + cols.map(function (c) { return '<th scope="col">' + esc(c) + '</th>'; }).join('') + '</tr></thead><tbody>' +
+      p.guia.map(function (g) { return '<tr' + (g.t === sel ? ' class="on"' : '') + '><th scope="row">' + esc(g.t) + '</th><td>' + esc(g.a) + ' cm</td>' + (cols.length > 1 ? '<td>' + esc(g.l) + ' cm</td>' : '') + '</tr>'; }).join('') +
       '</tbody></table><p>' + (pecho ? 'Medidas de la prenda apoyada en plano: ancho de axila a axila y largo desde el hombro. Compará con una prenda tuya que te quede bien.'
                                      : 'Medidas de la prenda apoyada en plano, en centímetros. Compará con una prenda tuya que te quede bien.') +
       (p.calce ? ' Este modelo es de calce ' + esc(String(p.calce).toLowerCase()) + '.' : '') + '</p>';
@@ -1093,7 +1093,7 @@ window.TIENDA = {
         var n = availC(i, p, v, t);
         return '<button type="button" class="sz" data-ss="' + esc(t) + '" aria-pressed="' + (o.size === t) + '"' + (n > 0 ? '' : ' disabled aria-label="' + esc(t) + ', sin stock"') + '>' + esc(t) + '</button>';
       }).join('') + '</div></div></div>';
-    if (p.guia && p.guia.length) h += '<button type="button" class="link" data-sg="' + i + '" style="margin-top:8px" aria-expanded="' + !!S.cmb.guide[i] + '">Tabla de talles</button>' +
+    if (p.guia && p.guia.length && p.guiaCols.length) h += '<button type="button" class="link" data-sg="' + i + '" style="margin-top:8px" aria-expanded="' + !!S.cmb.guide[i] + '">Tabla de talles</button>' +
       '<div class="guide"' + (S.cmb.guide[i] ? '' : ' hidden') + '>' + guideHTML(p, o.size) + '</div>';
     return h + '</section>';
   }
@@ -1303,7 +1303,7 @@ window.TIENDA = {
         p.tipo = p.tipo === 'combo' ? 'combo' : 'producto'; p.categoria = String(p.categoria || '');
         p.precio = Number(p.precio) || 0; p.precioAntes = p.tipo === 'combo' ? 0 : (Number(p.precioAntes) || 0);
         p.variantes = Array.isArray(p.variantes) ? p.variantes : []; p.componentes = Array.isArray(p.componentes) ? p.componentes : [];
-        p.guiaCols = Array.isArray(p.guiaCols) && p.guiaCols.length === 2 ? p.guiaCols : ['Ancho de pecho', 'Largo'];
+        p.guiaCols = Array.isArray(p.guiaCols) && p.guiaCols.length <= 2 ? p.guiaCols : ['Ancho de pecho', 'Largo'];
         p.variantes.forEach(function (v) { v.stock = v.stock || {}; v.imagenes = Array.isArray(v.imagenes) ? v.imagenes : []; });
         return p;
       });
